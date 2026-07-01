@@ -34,3 +34,9 @@ ios/*.xcworkspace/xcuserdata/
 .idea/
 .vscode/
 *.swp
+
+# Design handoff bundle (large; reference only)
+docs/design/
+
+# coding agent files
+.claude/
