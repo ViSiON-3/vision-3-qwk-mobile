@@ -7,6 +7,8 @@ export { parseMessagesDat } from './messages';
 export { parseNdx, msbinToInt } from './ndx';
 export { readQwkPacket } from './packet';
 export { writeRep } from './rep';
+export { buildQwkPacket } from './build';
+export type { QwkMessageInput, QwkControlInput } from './build';
 export type { HeaderSection } from './headers';
 export type { ParseMessagesOptions } from './messages';
 export type { WriteRepOptions } from './rep';

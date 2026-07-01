@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button } from '../components';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, messagesForArea, areas, conferences } from '../store/useStore';
+import { useStore, messagesForArea, areas } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
 
@@ -26,13 +26,13 @@ function Field({ name, value, right }: { name: string; value: string; right?: Re
 export function ReaderScreen({ navigation, route }: Props) {
   const { areaId, messageId } = route.params;
   const markRead = useStore((s) => s.markRead);
+  const messages = useStore((s) => s.messages);
 
-  const list = messagesForArea(areaId);
+  const list = messagesForArea(messages, areaId);
   const index = list.findIndex((m) => m.id === messageId);
   const msg = list[index];
 
   const area = areas.find((a) => a.id === areaId);
-  const conf = conferences.find((c) => c.id === area?.conferenceId);
 
   useEffect(() => {
     if (msg) markRead(msg.id);
@@ -58,7 +58,7 @@ export function ReaderScreen({ navigation, route }: Props) {
     navigation.navigate('Compose', {
       toHandle: msg.from,
       subject: msg.subject.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject}`,
-      conferenceNumber: conf?.number ?? 0,
+      conferenceNumber: area?.qwkConference ?? 0,
       areaName: area?.name ?? '',
       priv: msg.isPrivate,
     });

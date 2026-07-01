@@ -23,14 +23,15 @@ type Props = BottomTabScreenProps<TabParamList, 'Sync'>;
 export function SyncScreen({ navigation }: Props) {
   const board = useStore(activeBoard);
   const readIds = useStore((s) => s.readIds);
+  const messages = useStore((s) => s.messages);
   const drafts = useStore((s) => s.drafts);
   const syncing = useStore((s) => s.syncing);
   const lastPacket = useStore((s) => s.lastPacket);
   const syncNow = useStore((s) => s.syncNow);
   const toast = useToast();
 
-  const unread = unreadTotal(readIds);
-  const priv = privateUnread(readIds);
+  const unread = unreadTotal(messages, readIds);
+  const priv = privateUnread(messages, readIds);
 
   const wasSyncing = useRef(false);
   useEffect(() => {

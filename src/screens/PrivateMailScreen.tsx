@@ -11,7 +11,8 @@ import { useStore, privateMessages } from '../store/useStore';
 export function PrivateMailScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const readIds = useStore((s) => s.readIds);
-  const list = privateMessages();
+  const messages = useStore((s) => s.messages);
+  const list = privateMessages(messages);
 
   return (
     <Screen title="PRIVATE MAIL" right={<GearButton />} scroll>

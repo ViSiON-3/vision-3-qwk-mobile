@@ -12,16 +12,17 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Areas'>;
 export function AreasScreen({ route, navigation }: Props) {
   const { conferenceId } = route.params;
   const readIds = useStore((s) => s.readIds);
+  const messages = useStore((s) => s.messages);
   const conf = conferences.find((c) => c.id === conferenceId);
   const list = areasForConference(conferenceId);
-  const totalUnread = unreadInConference(conferenceId, readIds);
+  const totalUnread = unreadInConference(messages, conferenceId, readIds);
 
   return (
     <Screen title={(conf?.name ?? 'AREAS').toUpperCase()} onBack={() => navigation.goBack()} scroll>
       <Eyebrow>{`${conf?.name ?? ''} · ${list.length} AREAS · ${totalUnread} UNREAD`}</Eyebrow>
       <Card style={styles.card}>
         {list.map((area, i) => {
-          const unread = unreadInArea(area.id, readIds);
+          const unread = unreadInArea(messages, area.id, readIds);
           return (
             <ListRow
               key={area.id}

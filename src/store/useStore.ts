@@ -1,203 +1,321 @@
 import { create } from 'zustand';
-import { Board, Draft, ImportReport, Packet, Settings } from './types';
+import { Board, Draft, ImportReport, Message, Packet, Settings } from './types';
+import { mockBoards } from './mockData';
+import { conferences, areas, areasForConference, PRIVATE_CONFERENCE } from './taxonomy';
+import { buildSampleQwk } from './sampleQwk';
+import { parsePacketToMessages } from './viewModel';
+import { readQwkPacket } from '../qwk';
 import {
-  mockAreas,
-  mockBoards,
-  mockConferences,
-  mockLastPacket,
-  mockMessages,
-  mockPackets,
-} from './mockData';
+  writePacketBytes,
+  readPacketBytes,
+  deletePacketBytes,
+  clearAllPacketBytes,
+} from '../storage/packetCache';
+import { loadPersistedState, savePersistedState, PersistedState } from '../storage/persistence';
 
-let idSeq = 100;
-const nextId = (prefix: string) => `${prefix}${++idSeq}`;
+let idSeq = 0;
+const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(++idSeq).toString(36)}`;
 
 /** Derive a BBS id from a board name: uppercased alphanumerics, <= 8 chars. */
 export function deriveBbsId(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'BBS';
 }
 
+function stamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())}-${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+const DEFAULT_SETTINGS: Settings = { platform: 'ios', scanlines: true, glow: true };
+
 export interface AppState {
-  // Boards
+  hydrated: boolean;
+
   boards: Board[];
   activeBoardId: string;
 
-  // Session
   loggedIn: boolean;
   connecting: boolean;
 
-  // Sync
   syncing: boolean;
   lastPacket: Packet | null;
 
-  // Read state
+  /** Messages parsed from the active board's cached packets. */
+  messages: Message[];
   readIds: Set<string>;
 
-  // Outbox
   drafts: Draft[];
   uploading: boolean;
   report: ImportReport | null;
 
-  // Storage
   packets: Packet[];
-
-  // Settings
   settings: Settings;
 
-  // --- actions ---
+  // lifecycle
+  hydrate: () => Promise<void>;
+
+  // session
   connect: () => void;
   disconnect: () => void;
   syncNow: () => void;
   markRead: (id: string) => void;
 
+  // boards
   selectBoard: (id: string) => { disconnected: boolean };
   addBoard: (input: Omit<Board, 'id' | 'bbsId'>) => void;
   updateBoard: (id: string, input: Omit<Board, 'id' | 'bbsId'>) => void;
   deleteBoard: (id: string) => boolean;
 
+  // outbox
   addDraft: (draft: Omit<Draft, 'id'>) => void;
   removeDraft: (id: string) => void;
   uploadRep: () => void;
   clearReport: () => void;
 
+  // storage
   deletePacket: (id: string) => void;
   clearPackets: () => void;
 
+  // settings
   setPlatform: (p: Settings['platform']) => void;
   toggleScanlines: () => void;
   toggleGlow: () => void;
 }
 
-export const useStore = create<AppState>((set, get) => ({
-  boards: mockBoards,
-  activeBoardId: mockBoards[0].id,
+function snapshot(s: AppState): PersistedState {
+  return {
+    boards: s.boards,
+    activeBoardId: s.activeBoardId,
+    settings: s.settings,
+    drafts: s.drafts,
+    packets: s.packets,
+    readIds: [...s.readIds],
+  };
+}
 
-  loggedIn: false,
-  connecting: false,
+export const useStore = create<AppState>((set, get) => {
+  const persist = () => void savePersistedState(snapshot(get()));
 
-  syncing: false,
-  lastPacket: mockLastPacket,
+  const activeBoardOf = (): Board | undefined => get().boards.find((b) => b.id === get().activeBoardId);
 
-  readIds: new Set<string>(),
+  /** Re-parse the active board's cached packets into state.messages. */
+  const reloadMessages = async () => {
+    const board = activeBoardOf();
+    if (!board) return set({ messages: [] });
+    const byId = new Map<string, Message>();
+    for (const p of get().packets.filter((pk) => pk.bbsId === board.bbsId)) {
+      const bytes = await readPacketBytes(p.id);
+      if (!bytes) continue;
+      for (const m of parsePacketToMessages(bytes, board.bbsId)) byId.set(m.id, m);
+    }
+    set({ messages: [...byId.values()] });
+  };
 
-  drafts: [],
-  uploading: false,
-  report: null,
+  /** Build + cache a sample .QWK for the active board (stands in for download). */
+  const importSamplePacket = async () => {
+    const board = activeBoardOf();
+    if (!board) return;
+    const bytes = buildSampleQwk(board.bbsId);
+    const id = nextId('pkt');
+    writePacketBytes(id, bytes);
+    const parsed = readQwkPacket(bytes);
+    const meta: Packet = {
+      id,
+      bbsId: board.bbsId,
+      file: `${board.bbsId}.QWK`,
+      msgs: parsed.messages.length,
+      confs: conferences.length,
+      areas: areas.length,
+      kb: Math.max(1, Math.round(bytes.length / 1024)),
+      date: stamp(),
+    };
+    set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
+    await reloadMessages();
+    persist();
+  };
 
-  packets: mockPackets,
+  return {
+    hydrated: false,
 
-  settings: { platform: 'ios', scanlines: true, glow: true },
+    boards: mockBoards,
+    activeBoardId: mockBoards[0].id,
 
-  connect: () => {
-    set({ connecting: true });
-    setTimeout(() => set({ connecting: false, loggedIn: true }), 1600);
-  },
-  disconnect: () => set({ loggedIn: false, connecting: false }),
+    loggedIn: false,
+    connecting: false,
 
-  syncNow: () => {
-    set({ syncing: true });
-    setTimeout(() => {
-      const active = get().boards.find((b) => b.id === get().activeBoardId);
-      const pkt: Packet = {
-        ...mockLastPacket,
-        id: nextId('pkt'),
-        bbsId: active?.bbsId ?? mockLastPacket.bbsId,
-        file: `${active?.bbsId ?? 'V3HQ'}.QWK`,
-      };
-      set((s) => ({ syncing: false, lastPacket: pkt, packets: [pkt, ...s.packets] }));
-    }, 1800);
-  },
+    syncing: false,
+    lastPacket: null,
 
-  markRead: (id) =>
-    set((s) => {
-      if (s.readIds.has(id)) return s;
-      const next = new Set(s.readIds);
+    messages: [],
+    readIds: new Set<string>(),
+
+    drafts: [],
+    uploading: false,
+    report: null,
+
+    packets: [],
+    settings: DEFAULT_SETTINGS,
+
+    hydrate: async () => {
+      const persisted = await loadPersistedState();
+      if (persisted) {
+        set({
+          boards: persisted.boards.length ? persisted.boards : mockBoards,
+          activeBoardId: persisted.activeBoardId || mockBoards[0].id,
+          settings: { ...DEFAULT_SETTINGS, ...persisted.settings },
+          drafts: persisted.drafts ?? [],
+          packets: persisted.packets ?? [],
+          readIds: new Set(persisted.readIds ?? []),
+        });
+        await reloadMessages();
+      } else {
+        // First run: seed defaults and generate an initial sample packet.
+        set({ boards: mockBoards, activeBoardId: mockBoards[0].id, settings: DEFAULT_SETTINGS });
+        await importSamplePacket();
+      }
+      // Ensure the active board has at least one packet to read.
+      const board = activeBoardOf();
+      if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) {
+        await importSamplePacket();
+      }
+      set({ hydrated: true });
+    },
+
+    connect: () => {
+      set({ connecting: true });
+      setTimeout(() => set({ connecting: false, loggedIn: true }), 1600);
+    },
+    disconnect: () => set({ loggedIn: false, connecting: false }),
+
+    syncNow: () => {
+      set({ syncing: true });
+      setTimeout(async () => {
+        await importSamplePacket();
+        set({ syncing: false });
+      }, 1800);
+    },
+
+    markRead: (id) => {
+      if (get().readIds.has(id)) return;
+      const next = new Set(get().readIds);
       next.add(id);
-      return { readIds: next };
-    }),
+      set({ readIds: next });
+      persist();
+    },
 
-  selectBoard: (id) => {
-    const state = get();
-    const wasLoggedIn = state.loggedIn && id !== state.activeBoardId;
-    set({ activeBoardId: id, ...(wasLoggedIn ? { loggedIn: false } : {}) });
-    return { disconnected: wasLoggedIn };
-  },
+    selectBoard: (id) => {
+      const state = get();
+      const wasLoggedIn = state.loggedIn && id !== state.activeBoardId;
+      set({ activeBoardId: id, ...(wasLoggedIn ? { loggedIn: false } : {}) });
+      persist();
+      void reloadMessages().then(() => {
+        const board = activeBoardOf();
+        if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) void importSamplePacket();
+      });
+      return { disconnected: wasLoggedIn };
+    },
 
-  addBoard: (input) =>
-    set((s) => ({
-      boards: [...s.boards, { ...input, id: nextId('b'), bbsId: deriveBbsId(input.name) }],
-    })),
+    addBoard: (input) => {
+      set((s) => ({ boards: [...s.boards, { ...input, id: nextId('b'), bbsId: deriveBbsId(input.name) }] }));
+      persist();
+    },
 
-  updateBoard: (id, input) =>
-    set((s) => ({
-      boards: s.boards.map((b) => (b.id === id ? { ...b, ...input, bbsId: deriveBbsId(input.name) } : b)),
-    })),
+    updateBoard: (id, input) => {
+      set((s) => ({
+        boards: s.boards.map((b) => (b.id === id ? { ...b, ...input, bbsId: deriveBbsId(input.name) } : b)),
+      }));
+      persist();
+    },
 
-  deleteBoard: (id) => {
-    const state = get();
-    if (state.boards.length <= 1) return false;
-    const boards = state.boards.filter((b) => b.id !== id);
-    const activeBoardId = state.activeBoardId === id ? boards[0].id : state.activeBoardId;
-    set({ boards, activeBoardId });
-    return true;
-  },
+    deleteBoard: (id) => {
+      const state = get();
+      if (state.boards.length <= 1) return false;
+      const boards = state.boards.filter((b) => b.id !== id);
+      const activeBoardId = state.activeBoardId === id ? boards[0].id : state.activeBoardId;
+      set({ boards, activeBoardId });
+      persist();
+      if (state.activeBoardId === id) void reloadMessages();
+      return true;
+    },
 
-  addDraft: (draft) => set((s) => ({ drafts: [...s.drafts, { ...draft, id: nextId('d') }] })),
-  removeDraft: (id) => set((s) => ({ drafts: s.drafts.filter((d) => d.id !== id) })),
+    addDraft: (draft) => {
+      set((s) => ({ drafts: [...s.drafts, { ...draft, id: nextId('d') }] }));
+      persist();
+    },
+    removeDraft: (id) => {
+      set((s) => ({ drafts: s.drafts.filter((d) => d.id !== id) }));
+      persist();
+    },
 
-  uploadRep: () => {
-    set({ uploading: true });
-    setTimeout(() => {
-      const drafts = get().drafts;
-      const report: ImportReport = {
-        posted: drafts.length,
-        linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
-        dup: 0,
-        skipped: 0,
-      };
-      set({ uploading: false, report, drafts: [] });
-    }, 1700);
-  },
-  clearReport: () => set({ report: null }),
+    uploadRep: () => {
+      set({ uploading: true });
+      setTimeout(() => {
+        const drafts = get().drafts;
+        const report: ImportReport = {
+          posted: drafts.length,
+          linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
+          dup: 0,
+          skipped: 0,
+        };
+        set({ uploading: false, report, drafts: [] });
+        persist();
+      }, 1700);
+    },
+    clearReport: () => set({ report: null }),
 
-  deletePacket: (id) => set((s) => ({ packets: s.packets.filter((p) => p.id !== id) })),
-  clearPackets: () => set({ packets: [] }),
+    deletePacket: (id) => {
+      deletePacketBytes(id);
+      set((s) => ({ packets: s.packets.filter((p) => p.id !== id) }));
+      persist();
+      void reloadMessages();
+    },
+    clearPackets: () => {
+      clearAllPacketBytes();
+      set({ packets: [], lastPacket: null });
+      persist();
+      void reloadMessages();
+    },
 
-  setPlatform: (platform) => set((s) => ({ settings: { ...s.settings, platform } })),
-  toggleScanlines: () => set((s) => ({ settings: { ...s.settings, scanlines: !s.settings.scanlines } })),
-  toggleGlow: () => set((s) => ({ settings: { ...s.settings, glow: !s.settings.glow } })),
-}));
+    setPlatform: (platform) => {
+      set((s) => ({ settings: { ...s.settings, platform } }));
+      persist();
+    },
+    toggleScanlines: () => {
+      set((s) => ({ settings: { ...s.settings, scanlines: !s.settings.scanlines } }));
+      persist();
+    },
+    toggleGlow: () => {
+      set((s) => ({ settings: { ...s.settings, glow: !s.settings.glow } }));
+      persist();
+    },
+  };
+});
 
-// --- selectors (plain helpers over mock data) ---
+// --- taxonomy re-exports (static config) ---
+export { conferences, areas, areasForConference };
 
-export const conferences = mockConferences;
-export const areas = mockAreas;
-export const messages = mockMessages;
+// --- selectors over the dynamic message list ---
 
-export function areasForConference(conferenceId: string) {
-  return areas.filter((a) => a.conferenceId === conferenceId);
-}
-export function messagesForArea(areaId: string) {
-  return messages.filter((m) => m.areaId === areaId);
-}
-export function privateMessages() {
-  return messages.filter((m) => m.isPrivate);
-}
 export function activeBoard(state: AppState): Board | undefined {
   return state.boards.find((b) => b.id === state.activeBoardId);
 }
-
-// --- unread selectors (derive from the readIds set) ---
-
-export function unreadInArea(areaId: string, readIds: Set<string>): number {
-  return messagesForArea(areaId).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
+export function messagesForArea(messages: Message[], areaId: string): Message[] {
+  return messages.filter((m) => m.areaId === areaId);
 }
-export function unreadInConference(conferenceId: string, readIds: Set<string>): number {
-  return areasForConference(conferenceId).reduce((n, a) => n + unreadInArea(a.id, readIds), 0);
+export function privateMessages(messages: Message[]): Message[] {
+  return messages.filter((m) => m.isPrivate);
 }
-export function privateUnread(readIds: Set<string>): number {
-  return privateMessages().reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
+export function unreadInArea(messages: Message[], areaId: string, readIds: Set<string>): number {
+  return messagesForArea(messages, areaId).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
 }
-export function unreadTotal(readIds: Set<string>): number {
+export function unreadInConference(messages: Message[], conferenceId: string, readIds: Set<string>): number {
+  return areasForConference(conferenceId).reduce((n, a) => n + unreadInArea(messages, a.id, readIds), 0);
+}
+export function privateUnread(messages: Message[], readIds: Set<string>): number {
+  return privateMessages(messages).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
+}
+export function unreadTotal(messages: Message[], readIds: Set<string>): number {
   return messages.reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
 }
+export { PRIVATE_CONFERENCE };

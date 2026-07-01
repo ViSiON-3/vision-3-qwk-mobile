@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ToastProvider } from './src/components';
 import { useAppFonts } from './src/theme/useAppFonts';
+import { useStore } from './src/store/useStore';
 import { colors } from './src/theme/tokens';
 
 const navTheme = {
@@ -22,8 +23,14 @@ const navTheme = {
 
 export default function App() {
   const fontsLoaded = useAppFonts();
+  const hydrated = useStore((s) => s.hydrated);
+  const hydrate = useStore((s) => s.hydrate);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  if (!fontsLoaded || !hydrated) {
     return <View style={{ flex: 1, backgroundColor: colors.appBg }} />;
   }
 

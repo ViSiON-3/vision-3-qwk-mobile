@@ -12,6 +12,7 @@ import { useStore, conferences, areasForConference, unreadInConference } from '.
 export function ConferencesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const readIds = useStore((s) => s.readIds);
+  const messages = useStore((s) => s.messages);
 
   return (
     <Screen title="CONFERENCES" right={<GearButton />} scroll>
@@ -41,7 +42,7 @@ export function ConferencesScreen() {
                   {`${areasForConference(conf.id).length} areas · ${conf.tag}`}
                 </Mono>
               </View>
-              <UnreadPill count={unreadInConference(conf.id, readIds)} />
+              <UnreadPill count={unreadInConference(messages, conf.id, readIds)} />
             </ListRow>
           );
         })}

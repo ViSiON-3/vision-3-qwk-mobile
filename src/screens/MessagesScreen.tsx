@@ -12,10 +12,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Messages'>;
 export function MessagesScreen({ route, navigation }: Props) {
   const { areaId } = route.params;
   const readIds = useStore((s) => s.readIds);
+  const messages = useStore((s) => s.messages);
   const markRead = useStore((s) => s.markRead);
   const area = areas.find((a) => a.id === areaId);
-  const list = messagesForArea(areaId);
-  const unread = unreadInArea(areaId, readIds);
+  const list = messagesForArea(messages, areaId);
+  const unread = unreadInArea(messages, areaId, readIds);
 
   const open = (id: string) => {
     markRead(id);

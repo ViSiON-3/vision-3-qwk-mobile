@@ -18,8 +18,9 @@ const LABELS: Record<string, string> = { Sync: 'SYNC', Mail: 'MAIL', Conf: 'CONF
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const readIds = useStore((s) => s.readIds);
+  const messages = useStore((s) => s.messages);
   const drafts = useStore((s) => s.drafts);
-  const mailBadge = privateUnread(readIds);
+  const mailBadge = privateUnread(messages, readIds);
 
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom || 8 }]}>
