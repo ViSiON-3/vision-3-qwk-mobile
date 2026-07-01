@@ -1,0 +1,13 @@
+/** QWK/REP offline-mail engine — public API. */
+export * from './types';
+export { decodeCp437, encodeCp437, isCp437 } from './cp437';
+export { parseControlDat } from './control';
+export { parseHeadersDat, serializeHeadersDat, getHeaderField } from './headers';
+export { parseMessagesDat } from './messages';
+export { parseNdx, msbinToInt } from './ndx';
+export { readQwkPacket } from './packet';
+export { writeRep } from './rep';
+export type { HeaderSection } from './headers';
+export type { ParseMessagesOptions } from './messages';
+export type { WriteRepOptions } from './rep';
+export type { NdxRecord } from './ndx';
