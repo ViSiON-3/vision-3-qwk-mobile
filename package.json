@@ -1,0 +1,29 @@
+{
+  "name": "vision-3-qwk-mobile",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.1",
+    "expo-status-bar": "~57.0.0",
+    "fflate": "~0.8.2",
+    "react": "19.2.3",
+    "react-native": "0.86.0"
+  },
+  "devDependencies": {
+    "@types/jest": "~30.0.0",
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.1",
+    "jest": "~30.0.0",
+    "typescript": "~6.0.3"
+  },
+  "private": true
+}
