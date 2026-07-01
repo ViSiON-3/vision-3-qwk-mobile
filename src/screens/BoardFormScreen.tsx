@@ -1,0 +1,154 @@
+import React, { useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Screen, Vga, Button, useToast } from '../components';
+import { colors, fonts, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
+import { RootStackParamList } from '../navigation/types';
+import { useStore } from '../store/useStore';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'BoardForm'>;
+
+/** Screen 12 — create or edit a board's connection + credentials. */
+export function BoardFormScreen({ navigation, route }: Props) {
+  const boardId = route.params?.boardId;
+  const boards = useStore((s) => s.boards);
+  const addBoard = useStore((s) => s.addBoard);
+  const updateBoard = useStore((s) => s.updateBoard);
+  const toast = useToast();
+
+  const existing = boardId ? boards.find((b) => b.id === boardId) : undefined;
+
+  const [name, setName] = useState(existing?.name ?? '');
+  const [host, setHost] = useState(existing?.host ?? '');
+  const [port, setPort] = useState(existing ? String(existing.port) : '');
+  const [handle, setHandle] = useState(existing?.handle ?? '');
+  const [pass, setPass] = useState(existing?.pass ?? '');
+
+  const onSave = () => {
+    if (!name.trim() || !host.trim()) {
+      toast('Name and host are required');
+      return;
+    }
+    const input = {
+      name: name.trim(),
+      host: host.trim(),
+      port: parseInt(port, 10) || 8666,
+      handle: handle.trim(),
+      pass,
+    };
+    if (boardId) updateBoard(boardId, input);
+    else addBoard(input);
+    navigation.goBack();
+    toast(boardId ? 'Board updated' : 'Board added');
+  };
+
+  return (
+    <Screen title={boardId ? 'EDIT BOARD' : 'ADD BOARD'} onBack={() => navigation.goBack()} scroll>
+      <Field label="BOARD NAME">
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="ViSiON/3 BBS"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </Field>
+
+      <View style={styles.rowFields}>
+        <Field label="HOST" style={styles.flex2}>
+          <TextInput
+            value={host}
+            onChangeText={setHost}
+            placeholder="bbs.example.net"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </Field>
+        <Field label="PORT" style={styles.flex1}>
+          <TextInput
+            value={port}
+            onChangeText={setPort}
+            placeholder="8666"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            keyboardType="number-pad"
+          />
+        </Field>
+      </View>
+
+      <View style={styles.rowFields}>
+        <Field label="HANDLE" style={styles.flex1}>
+          <TextInput
+            value={handle}
+            onChangeText={setHandle}
+            placeholder="handle"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+        <Field label="PASSWORD" style={styles.flex1}>
+          <TextInput
+            value={pass}
+            onChangeText={setPass}
+            placeholder="password"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+      </View>
+
+      <View style={styles.saveWrap}>
+        <Button title="SAVE BOARD" variant="primary" onPress={onSave} />
+      </View>
+    </Screen>
+  );
+}
+
+function Field({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  return (
+    <View style={[styles.field, style]}>
+      <Vga color={colors.magenta} size={fontSize.eyebrow} spacing={letterSpacing.label} style={styles.label}>
+        {label}
+      </Vga>
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  field: { marginBottom: spacing.md },
+  label: { marginBottom: spacing.sm },
+  rowFields: { flexDirection: 'row', gap: spacing.md },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
+  input: {
+    backgroundColor: colors.surfaceInset,
+    borderWidth: 1,
+    borderColor: colors.borderInput,
+    borderRadius: radius.input,
+    color: colors.textPrimary,
+    fontFamily: fonts.mono,
+    fontSize: fontSize.listPrimary,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  saveWrap: { marginTop: spacing.md },
+});
