@@ -34,6 +34,7 @@ export function OutboxScreen() {
   const uploadRep = useStore((s) => s.uploadRep);
   const clearReport = useStore((s) => s.clearReport);
   const removeDraft = useStore((s) => s.removeDraft);
+  const error = useStore((s) => s.error);
   const board = useStore(activeBoard);
 
   return (
@@ -77,6 +78,16 @@ export function OutboxScreen() {
               </View>
             ))}
           </Card>
+          {error && (
+            <Card style={styles.error}>
+              <Mono size={fontSize.listMeta} color={colors.red}>
+                ✗ {error}
+              </Mono>
+              <Mono size={fontSize.listMeta} color={colors.textDim} style={styles.errorHint}>
+                Replies are kept — uploading is idempotent, so it's safe to retry.
+              </Mono>
+            </Card>
+          )}
           <Button title="⟰ UPLOAD REP PACKET" variant="green" onPress={uploadRep} style={styles.upload} />
         </>
       )}
@@ -118,6 +129,8 @@ const styles = StyleSheet.create({
   draftPreview: { marginTop: 1 },
   discard: { marginTop: 4 },
   upload: { marginTop: spacing.lg },
+  error: { marginTop: spacing.md, borderLeftWidth: 2, borderLeftColor: colors.red },
+  errorHint: { marginTop: 4 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: spacing.sm },
   emptyText: {},
   emptyHint: {},

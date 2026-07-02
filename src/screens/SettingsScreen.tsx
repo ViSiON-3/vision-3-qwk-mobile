@@ -22,6 +22,7 @@ export function SettingsScreen({ navigation }: Props) {
   const setPlatform = useStore((s) => s.setPlatform);
   const toggleScanlines = useStore((s) => s.toggleScanlines);
   const toggleGlow = useStore((s) => s.toggleGlow);
+  const toggleDemoMode = useStore((s) => s.toggleDemoMode);
   const boards = useStore((s) => s.boards);
   const packets = useStore((s) => s.packets);
   const disconnect = useStore((s) => s.disconnect);
@@ -97,6 +98,26 @@ export function SettingsScreen({ navigation }: Props) {
         <Eyebrow color={colors.magenta}>CONNECTION</Eyebrow>
       </View>
       <Card style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowLabel}>
+            <Mono size={fontSize.listPrimary} color={colors.textPrimary}>
+              Live connection
+            </Mono>
+            <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.sub}>
+              {settings.demoMode ? 'off — using demo sample packet' : 'on — real QWK API (needs dev build for TLS)'}
+            </Mono>
+          </View>
+          <Switch
+            value={!settings.demoMode}
+            onValueChange={toggleDemoMode}
+            trackColor={{ true: colors.toggleOn, false: colors.borderStrong }}
+            thumbColor="#ffffff"
+            ios_backgroundColor={colors.borderStrong}
+          />
+        </View>
+
+        <View style={styles.divider} />
+
         <Pressable
           onPress={() => navigation.navigate('Boards')}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}

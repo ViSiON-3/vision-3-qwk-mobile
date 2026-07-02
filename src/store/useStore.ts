@@ -5,6 +5,8 @@ import { conferences, areas, areasForConference, PRIVATE_CONFERENCE } from './ta
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacketToMessages } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
+import { makeSession, pushDrafts, describeSyncError } from './net';
+import { QwkSession } from '../api';
 import { readQwkPacket } from '../qwk';
 import {
   writePacketBytes,
@@ -28,7 +30,13 @@ function stamp(): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())}-${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-const DEFAULT_SETTINGS: Settings = { platform: 'ios', scanlines: true, glow: true };
+const DEFAULT_SETTINGS: Settings = { platform: 'ios', scanlines: true, glow: true, demoMode: true };
+
+/**
+ * The live API session for the active board. Held outside the reactive store
+ * (not serialized, carries the in-memory token across connect/sync/upload).
+ */
+let activeSession: QwkSession | null = null;
 
 export interface AppState {
   hydrated: boolean;
@@ -38,6 +46,8 @@ export interface AppState {
 
   loggedIn: boolean;
   connecting: boolean;
+  /** Last connect/sync/upload failure, user-facing; null when clear. */
+  error: string | null;
 
   syncing: boolean;
   lastPacket: Packet | null;
@@ -61,6 +71,7 @@ export interface AppState {
   disconnect: () => void;
   syncNow: () => void;
   markRead: (id: string) => void;
+  clearError: () => void;
 
   // boards
   selectBoard: (id: string) => { disconnected: boolean };
@@ -82,6 +93,7 @@ export interface AppState {
   setPlatform: (p: Settings['platform']) => void;
   toggleScanlines: () => void;
   toggleGlow: () => void;
+  toggleDemoMode: () => void;
 }
 
 function snapshot(s: AppState): PersistedState {
@@ -144,6 +156,7 @@ export const useStore = create<AppState>((set, get) => {
 
     loggedIn: false,
     connecting: false,
+    error: null,
 
     syncing: false,
     lastPacket: null,
@@ -183,18 +196,67 @@ export const useStore = create<AppState>((set, get) => {
       set({ hydrated: true });
     },
 
-    connect: () => {
-      set({ connecting: true });
-      setTimeout(() => set({ connecting: false, loggedIn: true }), 1600);
+    connect: async () => {
+      const board = activeBoardOf();
+      if (!board) return;
+      set({ connecting: true, error: null });
+      if (get().settings.demoMode) {
+        setTimeout(() => set({ connecting: false, loggedIn: true }), 1600);
+        return;
+      }
+      try {
+        activeSession = makeSession(board);
+        await activeSession.login();
+        set({ connecting: false, loggedIn: true });
+      } catch (e) {
+        activeSession = null;
+        set({ connecting: false, loggedIn: false, error: describeSyncError(e) });
+      }
     },
-    disconnect: () => set({ loggedIn: false, connecting: false }),
+    disconnect: () => {
+      activeSession = null;
+      set({ loggedIn: false, connecting: false, error: null });
+    },
 
-    syncNow: () => {
-      set({ syncing: true });
-      setTimeout(async () => {
-        await importSamplePacket();
+    syncNow: async () => {
+      const board = activeBoardOf();
+      if (!board) return;
+      set({ syncing: true, error: null });
+      if (get().settings.demoMode) {
+        setTimeout(async () => {
+          await importSamplePacket();
+          set({ syncing: false });
+        }, 1800);
+        return;
+      }
+      try {
+        if (!activeSession) activeSession = makeSession(board);
+        const res = await activeSession.download();
+        if (res.kind === 'none') {
+          set({ syncing: false }); // no new mail; nothing to commit
+          return;
+        }
+        // Commit only once bytes are fully received (server already advanced newscan).
+        const id = nextId('pkt');
+        writePacketBytes(id, res.bytes);
+        const parsed = readQwkPacket(res.bytes);
+        const meta: Packet = {
+          id,
+          bbsId: board.bbsId,
+          file: `${board.bbsId}.QWK`,
+          msgs: parsed.messages.length,
+          confs: parsed.control.conferences.length,
+          areas: parsed.control.conferences.length,
+          kb: Math.max(1, Math.round(res.bytes.length / 1024)),
+          date: stamp(),
+        };
+        set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
+        await reloadMessages();
         set({ syncing: false });
-      }, 1800);
+        persist();
+      } catch (e) {
+        set({ syncing: false, error: describeSyncError(e) });
+      }
     },
 
     markRead: (id) => {
@@ -204,11 +266,14 @@ export const useStore = create<AppState>((set, get) => {
       set({ readIds: next });
       persist();
     },
+    clearError: () => set({ error: null }),
 
     selectBoard: (id) => {
       const state = get();
-      const wasLoggedIn = state.loggedIn && id !== state.activeBoardId;
-      set({ activeBoardId: id, ...(wasLoggedIn ? { loggedIn: false } : {}) });
+      const changed = id !== state.activeBoardId;
+      const wasLoggedIn = state.loggedIn && changed;
+      if (changed) activeSession = null; // creds differ per board
+      set({ activeBoardId: id, ...(wasLoggedIn ? { loggedIn: false } : {}), ...(changed ? { error: null } : {}) });
       persist();
       void reloadMessages().then(() => {
         const board = activeBoardOf();
@@ -249,24 +314,45 @@ export const useStore = create<AppState>((set, get) => {
       persist();
     },
 
-    uploadRep: () => {
-      set({ uploading: true });
-      setTimeout(() => {
-        const drafts = get().drafts;
-        const board = activeBoardOf();
-        // Compile the outbox into a real .REP (validates the engine writer path).
-        // Online mode will `await session.upload(rep)` and use the server's
-        // import result; offline we simulate the report from the drafts.
-        if (board && drafts.length) buildRepFromDrafts(board.bbsId, drafts);
+    uploadRep: async () => {
+      const board = activeBoardOf();
+      if (!board) return;
+      const drafts = get().drafts;
+      set({ uploading: true, error: null });
+      if (get().settings.demoMode) {
+        setTimeout(() => {
+          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts); // exercise the writer
+          const report: ImportReport = {
+            posted: drafts.length,
+            linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
+            dup: 0,
+            skipped: 0,
+          };
+          set({ uploading: false, report, drafts: [] });
+          persist();
+        }, 1700);
+        return;
+      }
+      try {
+        if (!activeSession) activeSession = makeSession(board);
+        const result = await pushDrafts(activeSession, board.bbsId, drafts);
+        if (result.wrongBBS) {
+          // Nothing posted — keep the outbox so the user can fix the board id.
+          set({ uploading: false, error: `Server rejected packet: wrong BBS id (${board.bbsId}).` });
+          return;
+        }
         const report: ImportReport = {
-          posted: drafts.length,
+          posted: result.posted,
           linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
-          dup: 0,
-          skipped: 0,
+          dup: result.duplicate,
+          skipped: result.skipped,
         };
         set({ uploading: false, report, drafts: [] });
         persist();
-      }, 1700);
+      } catch (e) {
+        // Upload is idempotent (server de-dupes) — safe to retry; keep drafts.
+        set({ uploading: false, error: describeSyncError(e) });
+      }
     },
     clearReport: () => set({ report: null }),
 
@@ -293,6 +379,11 @@ export const useStore = create<AppState>((set, get) => {
     },
     toggleGlow: () => {
       set((s) => ({ settings: { ...s.settings, glow: !s.settings.glow } }));
+      persist();
+    },
+    toggleDemoMode: () => {
+      activeSession = null; // switching transport mode drops any live session
+      set((s) => ({ settings: { ...s.settings, demoMode: !s.settings.demoMode }, loggedIn: false, error: null }));
       persist();
     },
   };

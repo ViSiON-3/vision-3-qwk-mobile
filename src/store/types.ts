@@ -17,6 +17,8 @@ export interface Settings {
   platform: 'ios' | 'android';
   scanlines: boolean;
   glow: boolean;
+  /** When true, sync/upload use a generated sample packet instead of the network. */
+  demoMode: boolean;
 }
 
 export interface Conference {

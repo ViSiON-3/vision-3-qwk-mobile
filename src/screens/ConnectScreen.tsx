@@ -15,6 +15,8 @@ export function ConnectScreen({ navigation }: Props) {
   const board = useStore(activeBoard);
   const connecting = useStore((s) => s.connecting);
   const connect = useStore((s) => s.connect);
+  const error = useStore((s) => s.error);
+  const demoMode = useStore((s) => s.settings.demoMode);
 
   const handshake = board
     ? [
@@ -72,7 +74,15 @@ export function ConnectScreen({ navigation }: Props) {
             </View>
           </Card>
 
-          <Button title="▸ DIAL IN" onPress={connect} style={styles.dial} />
+          {error && (
+            <Card style={styles.error}>
+              <Mono color={colors.red} size={fontSize.listMeta}>
+                ✗ {error}
+              </Mono>
+            </Card>
+          )}
+
+          <Button title={demoMode ? '▸ DIAL IN (DEMO)' : '▸ DIAL IN'} onPress={connect} style={styles.dial} />
 
           <Pressable onPress={() => navigation.navigate('Boards')} style={styles.credLink}>
             <Mono color={colors.textDim} size={fontSize.listMeta}>
@@ -113,6 +123,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderDivider,
   },
   summaryRowLast: { borderBottomWidth: 0 },
+  error: { marginTop: spacing.md, borderLeftWidth: 2, borderLeftColor: colors.red },
   dial: { marginTop: spacing.lg },
   credLink: { alignItems: 'center', marginTop: spacing.md },
 });

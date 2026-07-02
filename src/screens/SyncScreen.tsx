@@ -28,6 +28,7 @@ export function SyncScreen({ navigation }: Props) {
   const syncing = useStore((s) => s.syncing);
   const lastPacket = useStore((s) => s.lastPacket);
   const syncNow = useStore((s) => s.syncNow);
+  const error = useStore((s) => s.error);
   const toast = useToast();
 
   const unread = unreadTotal(messages, readIds);
@@ -35,9 +36,9 @@ export function SyncScreen({ navigation }: Props) {
 
   const wasSyncing = useRef(false);
   useEffect(() => {
-    if (wasSyncing.current && !syncing) toast('Packet received');
+    if (wasSyncing.current && !syncing) toast(error ?? 'Packet received');
     wasSyncing.current = syncing;
-  }, [syncing, toast]);
+  }, [syncing, error, toast]);
 
   return (
     <Screen title="OFFLINE MAIL" right={<GearButton />} scroll>
