@@ -7,6 +7,8 @@
  */
 import {
   createQwkClient,
+  createPinnedFetch,
+  PinningUnavailableError,
   QwkSession,
   QwkApiError,
   QwkAuthError,
@@ -17,9 +19,14 @@ import {
 import { Board, Draft } from './types';
 import { buildRepFromDrafts } from './repBuilder';
 
-/** Build a session for a board (fetch injectable for tests / TLS-pinned transport). */
+/**
+ * Build a session for a board. A test/override fetch wins; otherwise a board
+ * with a pinned fingerprint uses the native pinned transport, and one without
+ * falls back to the platform fetch (fine for a real CA-signed cert).
+ */
 export function makeSession(board: Board, fetchImpl?: FetchLike): QwkSession {
-  const client = createQwkClient({ host: board.host, port: board.port, fetch: fetchImpl });
+  const fetch = fetchImpl ?? (board.fingerprint ? createPinnedFetch(board.fingerprint) : undefined);
+  const client = createQwkClient({ host: board.host, port: board.port, fetch });
   return new QwkSession(client, { handle: board.handle, password: board.pass });
 }
 
@@ -39,6 +46,7 @@ export function describeSyncError(e: unknown): string {
     if (e.code === 'too_large') return 'Reply packet is too large to upload.';
     return e.message || `Server error (${e.status}).`;
   }
+  if (e instanceof PinningUnavailableError) return e.message;
   if (e instanceof Error) return e.message || 'Network error.';
   return 'Network error.';
 }

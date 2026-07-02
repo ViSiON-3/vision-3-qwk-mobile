@@ -9,6 +9,8 @@ export interface Board {
   pass: string;
   /** Derived BBS id (uppercased alnum, <=8) or server-provided. */
   bbsId: string;
+  /** Pinned server TLS cert SHA-256 (bare hex). Empty/undefined = no pinning. */
+  fingerprint?: string;
   sysop?: string;
   node?: string;
 }

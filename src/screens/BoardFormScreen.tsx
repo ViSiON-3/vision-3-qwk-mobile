@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Screen, Vga, Button, useToast } from '../components';
+import { Screen, Vga, Mono, Button, useToast } from '../components';
 import { colors, fonts, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
+import { normalizeFingerprint, isValidFingerprint, formatFingerprint } from '../api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardForm'>;
 
@@ -23,10 +24,18 @@ export function BoardFormScreen({ navigation, route }: Props) {
   const [port, setPort] = useState(existing ? String(existing.port) : '');
   const [handle, setHandle] = useState(existing?.handle ?? '');
   const [pass, setPass] = useState(existing?.pass ?? '');
+  const [fingerprint, setFingerprint] = useState(existing?.fingerprint ? formatFingerprint(existing.fingerprint) : '');
+
+  const fpEntered = fingerprint.trim().length > 0;
+  const fpValid = fpEntered && isValidFingerprint(fingerprint);
 
   const onSave = () => {
     if (!name.trim() || !host.trim()) {
       toast('Name and host are required');
+      return;
+    }
+    if (fpEntered && !fpValid) {
+      toast('Fingerprint must be a full SHA-256 (64 hex chars)');
       return;
     }
     const input = {
@@ -35,6 +44,7 @@ export function BoardFormScreen({ navigation, route }: Props) {
       port: parseInt(port, 10) || 8666,
       handle: handle.trim(),
       pass,
+      fingerprint: fpEntered ? normalizeFingerprint(fingerprint) : undefined,
     };
     if (boardId) updateBoard(boardId, input);
     else addBoard(input);
@@ -107,6 +117,30 @@ export function BoardFormScreen({ navigation, route }: Props) {
         </Field>
       </View>
 
+      <Field label="TLS FINGERPRINT (SHA-256)">
+        <TextInput
+          value={fingerprint}
+          onChangeText={setFingerprint}
+          placeholder="paste from BBS startup log — blank for a real cert"
+          placeholderTextColor={colors.textMuted}
+          style={[styles.input, styles.fpInput]}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          multiline
+        />
+        <Mono
+          size={fontSize.listMeta}
+          color={fpEntered && !fpValid ? colors.red : colors.textDim}
+          style={styles.fpHint}
+        >
+          {fpEntered
+            ? fpValid
+              ? '✓ pinned — connections must match this cert'
+              : `${normalizeFingerprint(fingerprint).length}/64 hex chars`
+            : 'Pin the self-signed cert (SSH-host-key style). Leave blank if the board uses a CA cert.'}
+        </Mono>
+      </Field>
+
       <View style={styles.saveWrap}>
         <Button title="SAVE BOARD" variant="primary" onPress={onSave} />
       </View>
@@ -150,5 +184,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  fpInput: { fontSize: fontSize.listMeta, minHeight: 44 },
+  fpHint: { marginTop: spacing.sm },
   saveWrap: { marginTop: spacing.md },
 });
