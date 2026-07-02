@@ -4,6 +4,7 @@ import { mockBoards } from './mockData';
 import { conferences, areas, areasForConference, PRIVATE_CONFERENCE } from './taxonomy';
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacketToMessages } from './viewModel';
+import { buildRepFromDrafts } from './repBuilder';
 import { readQwkPacket } from '../qwk';
 import {
   writePacketBytes,
@@ -252,6 +253,11 @@ export const useStore = create<AppState>((set, get) => {
       set({ uploading: true });
       setTimeout(() => {
         const drafts = get().drafts;
+        const board = activeBoardOf();
+        // Compile the outbox into a real .REP (validates the engine writer path).
+        // Online mode will `await session.upload(rep)` and use the server's
+        // import result; offline we simulate the report from the drafts.
+        if (board && drafts.length) buildRepFromDrafts(board.bbsId, drafts);
         const report: ImportReport = {
           posted: drafts.length,
           linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
