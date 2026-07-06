@@ -36,6 +36,7 @@ describe('net', () => {
     it('maps auth / rate-limit / api / generic errors', () => {
       expect(describeSyncError(new QwkAuthError())).toMatch(/Login failed/);
       expect(describeSyncError(new QwkRateLimitError('slow', 30))).toMatch(/30s/);
+      expect(describeSyncError(new QwkRateLimitError('slow'))).toMatch(/try again shortly/);
       expect(describeSyncError(new QwkApiError('bad_packet', 'x', 400))).toMatch(/bad_packet/);
       expect(describeSyncError(new Error('boom'))).toBe('boom');
       expect(describeSyncError('weird')).toBe('Network error.');

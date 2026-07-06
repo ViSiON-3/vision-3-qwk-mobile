@@ -18,6 +18,10 @@ interface ConsoleProgressProps {
 export function ConsoleProgress({ lines, showBar, accent = colors.green, intervalMs = 240, onDone }: ConsoleProgressProps) {
   const [revealed, setRevealed] = useState(1);
   const blink = useRef(new Animated.Value(1)).current;
+  // Keep onDone in a ref so an inline callback's changing identity can't reset
+  // the reveal timer mid-cadence.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -32,12 +36,12 @@ export function ConsoleProgress({ lines, showBar, accent = colors.green, interva
 
   useEffect(() => {
     if (revealed >= lines.length) {
-      const t = setTimeout(() => onDone?.(), intervalMs);
+      const t = setTimeout(() => onDoneRef.current?.(), intervalMs);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => setRevealed((n) => n + 1), intervalMs);
     return () => clearTimeout(t);
-  }, [revealed, lines.length, intervalMs, onDone]);
+  }, [revealed, lines.length, intervalMs]);
 
   const pct = lines.length > 0 ? Math.min(100, Math.round((revealed / lines.length) * 100)) : 0;
   const filled = Math.round((pct / 100) * 16);
