@@ -7,6 +7,7 @@
  */
 import { BLOCK_SIZE, readField, readAsciiInt, readUint16LE } from './bytes';
 import { decodeCp437 } from './cp437';
+import { decodeUtf8 } from './utf8';
 import { getHeaderField, HeaderSection } from './headers';
 import { QwkMessage } from './types';
 
@@ -31,23 +32,6 @@ const OFF = {
 const ACTIVE_DELETED = 0xe2;
 const EOL = 0xe3;
 
-function utf8DecodeLine(bytes: Uint8Array): string {
-  // Small inline UTF-8 decoder used for body lines flagged Utf8.
-  let out = '';
-  let i = 0;
-  while (i < bytes.length) {
-    const b = bytes[i++];
-    if (b < 0x80) out += String.fromCharCode(b);
-    else if (b >= 0xc0 && b < 0xe0 && i < bytes.length) out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
-    else if (b >= 0xe0 && b < 0xf0 && i + 1 < bytes.length)
-      out += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
-    else if (b >= 0xf0 && i + 2 < bytes.length)
-      out += String.fromCodePoint(((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
-    else out += '�';
-  }
-  return out;
-}
-
 /** Decode a body: split on 0xE3, trim trailing padding, decode each line. */
 function decodeBody(raw: Uint8Array, utf8: boolean): string {
   // Trim trailing pad bytes (space / NUL) from the final block.
@@ -60,7 +44,7 @@ function decodeBody(raw: Uint8Array, utf8: boolean): string {
   for (let i = 0; i <= body.length; i++) {
     if (i === body.length || body[i] === EOL) {
       const seg = body.subarray(start, i);
-      lines.push(utf8 ? utf8DecodeLine(seg) : decodeCp437(seg));
+      lines.push(utf8 ? decodeUtf8(seg) : decodeCp437(seg));
       start = i + 1;
     }
   }

@@ -6,3 +6,4 @@ export { Card, Eyebrow, UnreadPill, Chip, ListRow, Button } from './primitives';
 export { ToastProvider, useToast } from './Toast';
 export { GearButton } from './GearButton';
 export { ConsoleProgress } from './ConsoleProgress';
+export { MessageListRow } from './MessageListRow';

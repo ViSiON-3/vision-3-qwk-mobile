@@ -6,14 +6,9 @@ import { Screen, Card, Mono, Button } from '../components';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
+import { formatSize } from '../utils/format';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Storage'>;
-
-/** Format a sum of packet KB as "n KB" or "n.n MB". */
-function formatSize(totalKb: number): string {
-  if (totalKb >= 1024) return `${(totalKb / 1024).toFixed(1)} MB`;
-  return `${totalKb} KB`;
-}
 
 /** Screen 13 — free device space by deleting cached packets. */
 export function StorageScreen({ navigation }: Props) {

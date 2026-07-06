@@ -10,35 +10,10 @@
  * safe regardless of whether a given message's values are CP437 or UTF-8.
  */
 import { decodeCp437 } from './cp437';
+import { decodeUtf8 } from './utf8';
 
 /** A parsed section: field name -> value. Keys preserve original case. */
 export type HeaderSection = Record<string, string>;
-
-/** Minimal UTF-8 decoder (RN-safe; no TextDecoder dependency). */
-function utf8Decode(bytes: Uint8Array): string {
-  let out = '';
-  let i = 0;
-  while (i < bytes.length) {
-    const b = bytes[i++];
-    if (b < 0x80) {
-      out += String.fromCharCode(b);
-    } else if (b >= 0xc0 && b < 0xe0 && i < bytes.length) {
-      out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
-    } else if (b >= 0xe0 && b < 0xf0 && i + 1 < bytes.length) {
-      out += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
-    } else if (b >= 0xf0 && i + 2 < bytes.length) {
-      const cp =
-        ((b & 0x07) << 18) |
-        ((bytes[i++] & 0x3f) << 12) |
-        ((bytes[i++] & 0x3f) << 6) |
-        (bytes[i++] & 0x3f);
-      out += String.fromCodePoint(cp);
-    } else {
-      out += '�';
-    }
-  }
-  return out;
-}
 
 interface RawField {
   key: string;
@@ -78,7 +53,7 @@ export function parseHeadersDat(bytes: Uint8Array): Map<number, HeaderSection> {
     }
     const section: HeaderSection = {};
     for (const f of raws) {
-      section[f.key] = utf8 ? utf8Decode(f.value) : decodeCp437(f.value);
+      section[f.key] = utf8 ? decodeUtf8(f.value) : decodeCp437(f.value);
     }
     result.set(currentOffset, section);
   };

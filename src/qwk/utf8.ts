@@ -1,6 +1,30 @@
+/** Minimal UTF-8 decoder (RN/Node safe, no TextDecoder dependency). Shared by
+ * the HEADERS.DAT parser and the message-body reader; invalid bytes → U+FFFD. */
+export function decodeUtf8(bytes: Uint8Array): string {
+  let out = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b = bytes[i++];
+    if (b < 0x80) {
+      out += String.fromCharCode(b);
+    } else if (b >= 0xc0 && b < 0xe0 && i < bytes.length) {
+      out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
+    } else if (b >= 0xe0 && b < 0xf0 && i + 1 < bytes.length) {
+      out += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
+    } else if (b >= 0xf0 && i + 2 < bytes.length) {
+      out += String.fromCodePoint(
+        ((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f)
+      );
+    } else {
+      out += '�';
+    }
+  }
+  return out;
+}
+
 /** Minimal UTF-8 encoder (RN/Node safe, no TextEncoder dependency). Used to
  * emit message/reply bodies as UTF-8 when they carry non-CP437 characters and
- * the HEADERS.DAT `Utf8: true` flag is set. Mirrors the decoder in messages.ts. */
+ * the HEADERS.DAT `Utf8: true` flag is set. Inverse of {@link decodeUtf8}. */
 export function encodeUtf8(str: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < str.length; i++) {

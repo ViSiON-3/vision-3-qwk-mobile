@@ -7,14 +7,9 @@ import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/token
 import { RootStackParamList } from '../navigation/types';
 import { useStore, activeBoard } from '../store/useStore';
 import { Settings } from '../store/types';
+import { formatSize } from '../utils/format';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
-
-/** Format a sum of packet KB as "n KB" or "n.n MB". */
-function formatSize(totalKb: number): string {
-  if (totalKb >= 1024) return `${(totalKb / 1024).toFixed(1)} MB`;
-  return `${totalKb} KB`;
-}
 
 /** Screen 10 — display prefs + entry to boards/storage + disconnect. */
 export function SettingsScreen({ navigation }: Props) {

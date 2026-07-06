@@ -28,27 +28,45 @@ export function writePacketBytes(id: string, bytes: Uint8Array): void {
   file.write(bytes);
 }
 
-/** Read packet bytes, or null if the file is missing. */
+/** Read packet bytes, or null if the file is missing/unreadable (a corrupt or
+ * permission-denied file shouldn't crash a reparse — treat it as absent). */
 export async function readPacketBytes(id: string): Promise<Uint8Array | null> {
-  const file = packetFile(id);
-  if (!file.exists) return null;
-  return await file.bytes();
+  try {
+    const file = packetFile(id);
+    if (!file.exists) return null;
+    return await file.bytes();
+  } catch (e) {
+    console.warn(`packetCache: failed to read ${id}`, e);
+    return null;
+  }
 }
 
-/** Delete one packet's bytes (no-op if absent). */
+/** Delete one packet's bytes (best-effort; no-op if absent/undeletable). */
 export function deletePacketBytes(id: string): void {
-  const file = packetFile(id);
-  if (file.exists) file.delete();
+  try {
+    const file = packetFile(id);
+    if (file.exists) file.delete();
+  } catch (e) {
+    console.warn(`packetCache: failed to delete ${id}`, e);
+  }
 }
 
-/** Remove the entire packet cache directory. */
+/** Remove the entire packet cache directory (best-effort). */
 export function clearAllPacketBytes(): void {
-  const dir = packetsDir();
-  if (dir.exists) dir.delete();
+  try {
+    const dir = packetsDir();
+    if (dir.exists) dir.delete();
+  } catch (e) {
+    console.warn('packetCache: failed to clear cache', e);
+  }
 }
 
-/** Total bytes used by the packet cache. */
+/** Total bytes used by the packet cache (0 if the size can't be read). */
 export function packetCacheSize(): number {
-  const dir = packetsDir();
-  return dir.exists ? dir.size ?? 0 : 0;
+  try {
+    const dir = packetsDir();
+    return dir.exists ? dir.size ?? 0 : 0;
+  } catch {
+    return 0;
+  }
 }
