@@ -9,7 +9,8 @@ import { Board, Draft, Packet, Settings } from '../store/types';
 const KEY = 'v3qwk:state:v1';
 
 export interface PersistedState {
-  boards: Board[];
+  /** Boards WITHOUT `pass` — passwords live in the keychain (see secrets.ts). */
+  boards: Omit<Board, 'pass'>[];
   activeBoardId: string;
   settings: Settings;
   drafts: Draft[];

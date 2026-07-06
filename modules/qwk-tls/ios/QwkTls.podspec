@@ -7,6 +7,7 @@ Pod::Spec.new do |s|
   s.homepage       = 'https://github.com/ViSiON-3/vision-3-qwk-mobile'
   s.license        = { :type => 'MIT' }
   s.platforms      = { :ios => '15.1' }
+  s.swift_version  = '5.0'
   s.source         = { :git => '' }
   s.static_framework = true
 

@@ -15,6 +15,7 @@ import {
   clearAllPacketBytes,
 } from '../storage/packetCache';
 import { loadPersistedState, savePersistedState, PersistedState } from '../storage/persistence';
+import { getBoardPassword, setBoardPassword, deleteBoardPassword } from '../storage/secrets';
 
 let idSeq = 0;
 const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(++idSeq).toString(36)}`;
@@ -98,7 +99,9 @@ export interface AppState {
 
 function snapshot(s: AppState): PersistedState {
   return {
-    boards: s.boards,
+    // Strip passwords — they live in the keychain (secrets.ts), never in the
+    // plaintext AsyncStorage snapshot.
+    boards: s.boards.map(({ pass: _pass, ...b }) => b),
     activeBoardId: s.activeBoardId,
     settings: s.settings,
     drafts: s.drafts,
@@ -174,8 +177,13 @@ export const useStore = create<AppState>((set, get) => {
     hydrate: async () => {
       const persisted = await loadPersistedState();
       if (persisted) {
+        // Board metadata comes from AsyncStorage; passwords from the keychain.
+        const base = persisted.boards.length ? persisted.boards : mockBoards;
+        const boards: Board[] = await Promise.all(
+          base.map(async (b) => ({ ...b, pass: await getBoardPassword(b.id) }))
+        );
         set({
-          boards: persisted.boards.length ? persisted.boards : mockBoards,
+          boards,
           activeBoardId: persisted.activeBoardId || mockBoards[0].id,
           settings: { ...DEFAULT_SETTINGS, ...persisted.settings },
           drafts: persisted.drafts ?? [],
@@ -283,7 +291,9 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     addBoard: (input) => {
-      set((s) => ({ boards: [...s.boards, { ...input, id: nextId('b'), bbsId: deriveBbsId(input.name) }] }));
+      const id = nextId('b');
+      set((s) => ({ boards: [...s.boards, { ...input, id, bbsId: deriveBbsId(input.name) }] }));
+      void setBoardPassword(id, input.pass); // keychain, not the persisted snapshot
       persist();
     },
 
@@ -291,6 +301,7 @@ export const useStore = create<AppState>((set, get) => {
       set((s) => ({
         boards: s.boards.map((b) => (b.id === id ? { ...b, ...input, bbsId: deriveBbsId(input.name) } : b)),
       }));
+      void setBoardPassword(id, input.pass);
       persist();
     },
 
@@ -300,6 +311,7 @@ export const useStore = create<AppState>((set, get) => {
       const boards = state.boards.filter((b) => b.id !== id);
       const activeBoardId = state.activeBoardId === id ? boards[0].id : state.activeBoardId;
       set({ boards, activeBoardId });
+      void deleteBoardPassword(id); // drop the keychain entry too
       persist();
       if (state.activeBoardId === id) void reloadMessages();
       return true;
