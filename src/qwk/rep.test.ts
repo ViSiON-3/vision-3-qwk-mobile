@@ -70,4 +70,20 @@ describe('writeRep', () => {
     const zip = unzipSync(writeRep('V3TEST', [reply({ body: art })]));
     expect(parseMessagesDat(zip['V3TEST.MSG'])[0].body).toBe(art);
   });
+
+  it('emits a non-CP437 body as UTF-8 with the Utf8 flag (no silent mangling)', () => {
+    const body = 'Café ☕ reply — 日本語 ok';
+    const zip = unzipSync(writeRep('V3TEST', [reply({ body })]));
+    expect(Object.keys(zip)).toContain('HEADERS.DAT');
+    const headers = parseHeadersDat(zip['HEADERS.DAT']);
+    const [m] = parseMessagesDat(zip['V3TEST.MSG'], { headers });
+    expect(m.utf8).toBe(true);
+    expect(m.body).toBe(body);
+  });
+
+  it('normalizes the BBSID so the .MSG entry name and block 0 always agree', () => {
+    const zip = unzipSync(writeRep('v3test', [reply()]));
+    expect(Object.keys(zip)).toContain('V3TEST.MSG');
+    expect(readField(zip['V3TEST.MSG'], 0, 128)).toBe('V3TEST');
+  });
 });

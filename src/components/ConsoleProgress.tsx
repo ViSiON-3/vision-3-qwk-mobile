@@ -20,12 +20,14 @@ export function ConsoleProgress({ lines, showBar, accent = colors.green, interva
   const blink = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(blink, { toValue: 0, duration: 500, useNativeDriver: true }),
         Animated.timing(blink, { toValue: 1, duration: 500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    anim.start();
+    return () => anim.stop();
   }, [blink]);
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function ConsoleProgress({ lines, showBar, accent = colors.green, interva
     return () => clearTimeout(t);
   }, [revealed, lines.length, intervalMs, onDone]);
 
-  const pct = Math.min(100, Math.round((revealed / lines.length) * 100));
+  const pct = lines.length > 0 ? Math.min(100, Math.round((revealed / lines.length) * 100)) : 0;
   const filled = Math.round((pct / 100) * 16);
   const bar = '█'.repeat(filled) + '░'.repeat(16 - filled);
 

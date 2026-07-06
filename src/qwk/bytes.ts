@@ -42,9 +42,15 @@ export function writeField(target: Uint8Array, offset: number, len: number, valu
   return len;
 }
 
-/** Write a left-justified, space-padded ASCII decimal field of width `len`. */
+/** Write a left-justified, space-padded ASCII decimal field of width `len`.
+ * Throws if the value doesn't fit — silently truncating would write a different,
+ * wrong number (e.g. 1234567 into 4 bytes → "1234"). */
 export function writeAsciiInt(target: Uint8Array, offset: number, len: number, value: number): number {
-  return writeField(target, offset, len, String(value));
+  const s = String(value);
+  if (s.length > len) {
+    throw new RangeError(`writeAsciiInt: value ${value} does not fit in ${len} bytes`);
+  }
+  return writeField(target, offset, len, s);
 }
 
 /** Write an unsigned little-endian 16-bit word. */

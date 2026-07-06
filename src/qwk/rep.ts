@@ -10,6 +10,7 @@
 import { zipSync, strToU8 } from 'fflate';
 import { BLOCK_SIZE, writeField, writeAsciiInt, writeUint16LE, concatBytes } from './bytes';
 import { encodeCp437, isCp437 } from './cp437';
+import { encodeUtf8 } from './utf8';
 import { serializeHeadersDat } from './headers';
 import { ReplyDraft } from './types';
 
@@ -23,12 +24,13 @@ const ACTIVE = 0xe1;
  */
 const ZIP_EPOCH_MS = 946684800000;
 
-function encodeBody(text: string): { bytes: Uint8Array; textBlocks: number } {
+function encodeBody(text: string, utf8: boolean): { bytes: Uint8Array; textBlocks: number } {
+  const encodeLine = utf8 ? encodeUtf8 : encodeCp437;
   const lines = text.split(/\r\n|\r|\n/);
   const parts: Uint8Array[] = [];
   for (let i = 0; i < lines.length; i++) {
     if (i > 0) parts.push(new Uint8Array([EOL]));
-    parts.push(encodeCp437(lines[i]));
+    parts.push(encodeLine(lines[i]));
   }
   const body = concatBytes(parts);
   const textBlocks = Math.max(1, Math.ceil(body.length / BLOCK_SIZE));
@@ -64,17 +66,26 @@ export interface WriteRepOptions {
 /** Compile reply drafts into a .REP zip (returns the zip bytes). */
 export function writeRep(bbsId: string, replies: ReplyDraft[], opts: WriteRepOptions = {}): Uint8Array {
   const includeHeaders = opts.includeHeaders !== false;
+  // Normalize once so block-0 content and the <BBSID>.MSG entry name always agree.
+  const id = bbsId.toUpperCase();
 
   // Block 0 carries the target BBSID.
   const producer = new Uint8Array(BLOCK_SIZE).fill(0x20);
-  writeField(producer, 0, BLOCK_SIZE, bbsId);
+  writeField(producer, 0, BLOCK_SIZE, id);
 
   const blocks: Uint8Array[] = [producer];
   const headerSections: { offset: number; fields: Array<[string, string]> }[] = [];
   let offset = BLOCK_SIZE; // first reply header-block offset
 
   for (const reply of replies) {
-    const { bytes: bodyBytes, textBlocks } = encodeBody(reply.body);
+    // The reader applies one Utf8 flag to the whole message (subject/to/from AND
+    // body), so include the body in detection and emit it UTF-8 when flagged —
+    // otherwise a non-CP437 body would be silently mangled to '?'. UTF-8 needs
+    // HEADERS.DAT to carry the flag; without it we fall back to lossy CP437.
+    const needsUtf8 =
+      includeHeaders &&
+      (!isCp437(reply.subject) || !isCp437(reply.to) || !isCp437(reply.from) || !isCp437(reply.body));
+    const { bytes: bodyBytes, textBlocks } = encodeBody(reply.body, needsUtf8);
     const header = buildHeaderBlock(reply, textBlocks);
     blocks.push(header, bodyBytes);
 
@@ -82,7 +93,6 @@ export function writeRep(bbsId: string, replies: ReplyDraft[], opts: WriteRepOpt
       const fields: Array<[string, string]> = [];
       if (reply.messageId) fields.push(['Message-ID', reply.messageId]);
       if (reply.inReplyTo) fields.push(['In-Reply-To', reply.inReplyTo]);
-      const needsUtf8 = !isCp437(reply.subject) || !isCp437(reply.to) || !isCp437(reply.from);
       if (needsUtf8) fields.push(['Utf8', 'true']);
       if (reply.subject.length > 25 || needsUtf8) fields.push(['Subject', reply.subject]);
       if (reply.to.length > 25 || needsUtf8) fields.push(['To', reply.to]);
@@ -95,7 +105,7 @@ export function writeRep(bbsId: string, replies: ReplyDraft[], opts: WriteRepOpt
 
   const msgBytes = concatBytes(blocks);
   const files: Record<string, Uint8Array> = {
-    [`${bbsId.toUpperCase()}.MSG`]: msgBytes,
+    [`${id}.MSG`]: msgBytes,
   };
   if (includeHeaders && headerSections.length > 0) {
     const text = serializeHeadersDat(headerSections);

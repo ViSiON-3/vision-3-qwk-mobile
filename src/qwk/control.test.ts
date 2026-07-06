@@ -49,6 +49,16 @@ describe('parseControlDat', () => {
     expect(c.bbsId).toBe('V3TEST');
   });
 
+  it('caps a hostile/corrupt conference count to available lines (no unbounded loop)', () => {
+    // A malicious CONTROL.DAT claims ~1e9 conferences but supplies only two pairs.
+    const raw = encodeCp437(
+      ['BBS', 'City', 'Phone', 'Sysop', '1,ID', 'date', 'USER', '', '0', '0', '999999999', '0', 'Main', '1', 'Net'].join('\n')
+    );
+    const c = parseControlDat(raw);
+    expect(c.conferences.length).toBeLessThanOrEqual(2);
+    expect(c.conferences[0]).toEqual({ number: 0, name: 'Main' });
+  });
+
   it('tolerates bare LF line endings', () => {
     const lf = encodeCp437(
       ['BBS', 'City', 'Phone', 'Sysop', '1,ID', 'date', 'USER', '', '0', '1', '0', '0', 'Main', 'W', 'N', 'G'].join('\n')

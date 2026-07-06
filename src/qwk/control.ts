@@ -39,8 +39,17 @@ export function parseControlDat(bytes: Uint8Array): ControlDat {
   const bbsId = (commaIdx >= 0 ? serialBbs.slice(commaIdx + 1) : serialBbs).trim();
 
   // Line 11 (index 10) = highest conference index = conferenceCount - 1.
+  // Packets come from untrusted BBS servers, so cap the count: never trust the
+  // field beyond what the remaining lines could actually hold (each conference
+  // is a number+name pair), and clamp to a sane ceiling — otherwise a corrupt or
+  // hostile CONTROL.DAT could spin a huge loop and hang the JS thread.
+  const MAX_CONFERENCES = 10000;
   const highestIdx = parseInt(line(10).trim(), 10);
-  const conferenceCount = Number.isFinite(highestIdx) && highestIdx >= 0 ? highestIdx + 1 : 0;
+  const maxByLines = Math.max(0, Math.floor((lines.length - 11) / 2));
+  const conferenceCount =
+    Number.isFinite(highestIdx) && highestIdx >= 0
+      ? Math.min(highestIdx + 1, MAX_CONFERENCES, maxByLines)
+      : 0;
 
   const conferences: QwkConference[] = [];
   let cursor = 11; // first pair line (index)
