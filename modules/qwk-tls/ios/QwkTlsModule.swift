@@ -108,6 +108,13 @@ private final class QwkTlsRequest: NSObject, URLSessionDelegate {
       return
     }
 
+    // Fail closed on a malformed pin (empty / not a 64-hex SHA-256) rather than
+    // relying on a hash mismatch — defense-in-depth alongside the JS validation.
+    guard pinnedSha256.count == 64 else {
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
     let der = SecCertificateCopyData(certificate) as Data
     let hex = SHA256.hash(data: der).map { String(format: "%02X", $0) }.joined()
 
