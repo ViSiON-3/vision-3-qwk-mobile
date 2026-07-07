@@ -284,9 +284,18 @@ export const useStore = create<AppState>((set, get) => {
           kb: Math.max(1, Math.round(res.bytes.length / 1024)),
           date: stamp(),
         };
+        const adopted = bbsId !== board.bbsId;
         set((s) => ({
-          boards: bbsId === board.bbsId ? s.boards : s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)),
-          packets: [meta, ...s.packets],
+          boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)) : s.boards,
+          // Re-key this board's existing packets to the adopted id too, so
+          // reloadMessages (which filters by bbsId) keeps showing their history
+          // instead of orphaning it under the old derived id.
+          packets: [
+            meta,
+            ...(adopted
+              ? s.packets.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
+              : s.packets),
+          ],
           lastPacket: meta,
         }));
         await reloadMessages();
