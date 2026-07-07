@@ -118,19 +118,9 @@ private final class QwkTlsRequest: NSObject, URLSessionDelegate {
       return
     }
 
-    let leaf: SecCertificate?
-    if #available(iOS 15.0, *) {
-      leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first
-    } else {
-      leaf = SecTrustGetCertificateAtIndex(trust, 0)
-    }
-    guard let certificate = leaf else {
-      completionHandler(.cancelAuthenticationChallenge, nil)
-      return
-    }
-
-    // Fail closed on a malformed pin (empty / not a 64-hex SHA-256) rather than
-    // relying on a hash mismatch — defense-in-depth alongside the JS validation.
+    // Fail closed on a malformed pin (empty / not a 64-hex SHA-256) or an
+    // unreadable cert — defense-in-depth alongside the JS validation.
+    // leafSha256Hex handles the leaf-cert extraction (shared with the probe).
     guard pinnedSha256.count == 64, let hex = leafSha256Hex(trust) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
