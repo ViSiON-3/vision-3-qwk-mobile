@@ -19,3 +19,11 @@ export function formatFingerprint(fp: string): string {
   const n = normalizeFingerprint(fp);
   return n.match(/.{1,2}/g)?.join(':') ?? n;
 }
+
+/** True when two fingerprints are the same cert, ignoring separators/case.
+ * Two blank/empty values are not considered equal (nothing to compare). */
+export function fingerprintsEqual(a: string | undefined, b: string | undefined): boolean {
+  const na = normalizeFingerprint(a ?? '');
+  const nb = normalizeFingerprint(b ?? '');
+  return na.length > 0 && na === nb;
+}

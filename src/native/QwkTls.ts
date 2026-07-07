@@ -26,6 +26,8 @@ export interface NativeResponse {
 
 export interface NativeQwkTls {
   request(options: NativeRequest): Promise<NativeResponse>;
+  /** Trust-on-first-use: return the server's leaf cert SHA-256 (64 upper-hex). */
+  getFingerprint(host: string, port: number): Promise<string>;
 }
 
 let cached: NativeQwkTls | null | undefined;

@@ -20,6 +20,19 @@ export class PinningUnavailableError extends Error {
 const utf8Decode = (bytes: Uint8Array): string =>
   typeof TextDecoder !== 'undefined' ? new TextDecoder().decode(bytes) : String.fromCharCode(...bytes);
 
+/**
+ * Trust-on-first-use: open an unpinned handshake to the server and return its
+ * leaf cert's SHA-256 (bare upper-hex), so the sysop can review + pin it instead
+ * of pasting the fingerprint by hand. Throws PinningUnavailableError without a
+ * dev build. The caller is responsible for showing the value for confirmation —
+ * TOFU trusts whatever cert answers first, so a human must verify it.
+ */
+export async function probeServerFingerprint(host: string, port: number): Promise<string> {
+  const native = getNativeQwkTls();
+  if (!native) throw new PinningUnavailableError();
+  return normalizeFingerprint(await native.getFingerprint(host, port));
+}
+
 /** Build a pinned fetch for a given SHA-256 fingerprint (any separator format). */
 export function createPinnedFetch(fingerprint: string): FetchLike {
   const pinnedSha256 = normalizeFingerprint(fingerprint);

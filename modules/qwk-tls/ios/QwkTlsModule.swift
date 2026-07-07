@@ -16,7 +16,28 @@ public class QwkTlsModule: Module {
     AsyncFunction("request") { (options: [String: Any], promise: Promise) in
       QwkTlsRequest.perform(options: options, promise: promise)
     }
+
+    // Trust-on-first-use: open an unpinned handshake and return the leaf cert's
+    // SHA-256 so the sysop can review + pin it without pasting hex by hand.
+    AsyncFunction("getFingerprint") { (host: String, port: Int, promise: Promise) in
+      QwkTlsProbe.perform(host: host, port: port, promise: promise)
+    }
   }
+}
+
+/** Upper-hex SHA-256 of the leaf certificate in a server-trust chain — the same
+ * value the pinning check compares against, so a captured fingerprint matches
+ * on later pinned connections. */
+func leafSha256Hex(_ trust: SecTrust) -> String? {
+  let leaf: SecCertificate?
+  if #available(iOS 15.0, *) {
+    leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first
+  } else {
+    leaf = SecTrustGetCertificateAtIndex(trust, 0)
+  }
+  guard let certificate = leaf else { return nil }
+  let der = SecCertificateCopyData(certificate) as Data
+  return SHA256.hash(data: der).map { String(format: "%02X", $0) }.joined()
 }
 
 private final class QwkTlsRequest: NSObject, URLSessionDelegate {
@@ -110,18 +131,84 @@ private final class QwkTlsRequest: NSObject, URLSessionDelegate {
 
     // Fail closed on a malformed pin (empty / not a 64-hex SHA-256) rather than
     // relying on a hash mismatch — defense-in-depth alongside the JS validation.
-    guard pinnedSha256.count == 64 else {
+    guard pinnedSha256.count == 64, let hex = leafSha256Hex(trust) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
     }
-
-    let der = SecCertificateCopyData(certificate) as Data
-    let hex = SHA256.hash(data: der).map { String(format: "%02X", $0) }.joined()
 
     if hex == pinnedSha256 {
       completionHandler(.useCredential, URLCredential(trust: trust))
     } else {
       completionHandler(.cancelAuthenticationChallenge, nil)
     }
+  }
+}
+
+/**
+ * QwkTlsProbe — one-shot trust-on-first-use fingerprint capture. Opens an
+ * unpinned TLS handshake to the host, reads the presented leaf cert's SHA-256,
+ * and resolves it without trusting the connection for any actual request (the
+ * challenge is cancelled once the cert is read). The sysop reviews + pins it.
+ */
+private final class QwkTlsProbe: NSObject, URLSessionDelegate {
+  private let promise: Promise
+  private var session: URLSession?
+  private var settled = false
+
+  private init(promise: Promise) {
+    self.promise = promise
+    super.init()
+  }
+
+  static func perform(host: String, port: Int, promise: Promise) {
+    guard port > 0, port <= 65535, let url = URL(string: "https://\(host):\(port)/") else {
+      promise.reject("QWK_TLS_ARGS", "invalid host/port")
+      return
+    }
+    QwkTlsProbe(promise: promise).start(url: url)
+  }
+
+  private func settle(_ fingerprint: String) {
+    if settled { return }
+    settled = true
+    promise.resolve(fingerprint)
+    session?.finishTasksAndInvalidate()
+  }
+
+  private func fail(_ message: String) {
+    if settled { return }
+    settled = true
+    promise.reject("QWK_TLS_PROBE", message)
+    session?.finishTasksAndInvalidate()
+  }
+
+  private func start(url: URL) {
+    var request = URLRequest(url: url)
+    request.httpMethod = "HEAD"
+    request.timeoutInterval = 15
+    let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+    self.session = session
+    session.dataTask(with: request) { [weak self] _, _, error in
+      // Reached only if no cert was captured (e.g. connection refused / non-TLS).
+      self?.fail(error?.localizedDescription ?? "no certificate presented")
+    }.resume()
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    guard
+      challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+      let trust = challenge.protectionSpace.serverTrust,
+      let hex = leafSha256Hex(trust)
+    else {
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+    // Capture the fingerprint (TOFU) and stop — don't trust the connection.
+    completionHandler(.cancelAuthenticationChallenge, nil)
+    settle(hex)
   }
 }

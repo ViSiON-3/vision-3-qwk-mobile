@@ -5,7 +5,14 @@ import { Screen, Vga, Mono, Button, useToast } from '../components';
 import { colors, fonts, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { normalizeFingerprint, isValidFingerprint, formatFingerprint } from '../api';
+import {
+  normalizeFingerprint,
+  isValidFingerprint,
+  formatFingerprint,
+  fingerprintsEqual,
+  probeServerFingerprint,
+  PinningUnavailableError,
+} from '../api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardForm'>;
 
@@ -25,9 +32,33 @@ export function BoardFormScreen({ navigation, route }: Props) {
   const [handle, setHandle] = useState(existing?.handle ?? '');
   const [pass, setPass] = useState(existing?.pass ?? '');
   const [fingerprint, setFingerprint] = useState(existing?.fingerprint ? formatFingerprint(existing.fingerprint) : '');
+  const [probing, setProbing] = useState(false);
+  // True when a freshly probed fingerprint differs from the board's saved pin —
+  // the SSH "host key changed" warning: don't trust it unless the sysop rotated.
+  const [changed, setChanged] = useState(false);
 
   const fpEntered = fingerprint.trim().length > 0;
   const fpValid = fpEntered && isValidFingerprint(fingerprint);
+
+  const onTrustServer = async () => {
+    const h = host.trim();
+    if (!h) {
+      toast('Enter the host first');
+      return;
+    }
+    setProbing(true);
+    try {
+      const fp = await probeServerFingerprint(h, parseInt(port, 10) || 8666);
+      setChanged(!!existing?.fingerprint && !fingerprintsEqual(fp, existing.fingerprint));
+      setFingerprint(formatFingerprint(fp));
+      toast('Fingerprint captured — verify, then save');
+    } catch (e) {
+      if (e instanceof PinningUnavailableError) toast('Fetching needs a dev build (not Expo Go)');
+      else toast(e instanceof Error ? e.message : 'Could not reach the server');
+    } finally {
+      setProbing(false);
+    }
+  };
 
   const onSave = () => {
     if (!name.trim() || !host.trim()) {
@@ -120,25 +151,43 @@ export function BoardFormScreen({ navigation, route }: Props) {
       <Field label="TLS FINGERPRINT (SHA-256)">
         <TextInput
           value={fingerprint}
-          onChangeText={setFingerprint}
-          placeholder="paste from BBS startup log — blank for a real cert"
+          onChangeText={(t) => {
+            setFingerprint(t);
+            setChanged(false); // manual edit clears the changed-cert warning
+          }}
+          placeholder="tap Trust Server, or paste from the BBS startup log"
           placeholderTextColor={colors.textMuted}
           style={[styles.input, styles.fpInput]}
           autoCapitalize="characters"
           autoCorrect={false}
           multiline
         />
-        <Mono
-          size={fontSize.listMeta}
-          color={fpEntered && !fpValid ? colors.red : colors.textDim}
-          style={styles.fpHint}
-        >
-          {fpEntered
-            ? fpValid
-              ? '✓ pinned — connections must match this cert'
-              : `${normalizeFingerprint(fingerprint).length}/64 hex chars`
-            : 'Pin the self-signed cert (SSH-host-key style). Leave blank if the board uses a CA cert.'}
-        </Mono>
+        <View style={styles.fpActions}>
+          <Button
+            title={probing ? 'FETCHING…' : '⟳ TRUST SERVER'}
+            variant="secondary"
+            onPress={onTrustServer}
+            disabled={probing || !host.trim()}
+            style={styles.trustBtn}
+          />
+        </View>
+        {changed ? (
+          <Mono size={fontSize.listMeta} color={colors.red} style={styles.fpHint}>
+            ⚠ Differs from the pinned cert — only trust this if the sysop regenerated it.
+          </Mono>
+        ) : (
+          <Mono
+            size={fontSize.listMeta}
+            color={fpEntered && !fpValid ? colors.red : colors.textDim}
+            style={styles.fpHint}
+          >
+            {fpEntered
+              ? fpValid
+                ? '✓ pinned — connections must match this cert'
+                : `${normalizeFingerprint(fingerprint).length}/64 hex chars`
+              : 'Trust-on-first-use: fetch + pin the cert, or paste it from the BBS startup log.'}
+          </Mono>
+        )}
       </Field>
 
       <View style={styles.saveWrap}>
@@ -185,6 +234,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   fpInput: { fontSize: fontSize.listMeta, minHeight: 44 },
+  fpActions: { flexDirection: 'row', marginTop: spacing.sm },
+  trustBtn: { flex: 1 },
   fpHint: { marginTop: spacing.sm },
   saveWrap: { marginTop: spacing.md },
 });
