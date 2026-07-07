@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen, Card, Eyebrow, MessageListRow } from '../components';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, areas, messagesForArea, unreadInArea } from '../store/useStore';
+import { useStore, messagesForArea, unreadInArea } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Messages'>;
 
@@ -13,6 +13,7 @@ export function MessagesScreen({ route, navigation }: Props) {
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
   const markRead = useStore((s) => s.markRead);
+  const areas = useStore((s) => s.areas);
   const area = areas.find((a) => a.id === areaId);
   const list = messagesForArea(messages, areaId);
   const unread = unreadInArea(messages, areaId, readIds);

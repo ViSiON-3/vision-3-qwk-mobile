@@ -6,13 +6,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen, Card, Eyebrow, ListRow, Vga, Mono, Chip, UnreadPill, GearButton } from '../components';
 import { colors, fontSize, spacing, radius } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, conferences, areasForConference, unreadInConference } from '../store/useStore';
+import { useStore, areasForConference, unreadInConference } from '../store/useStore';
 
 /** CONF tab — top-level list of conferences (message networks). */
 export function ConferencesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
+  const conferences = useStore((s) => s.conferences);
+  const areas = useStore((s) => s.areas);
+
+  if (conferences.length === 0) {
+    return (
+      <Screen title="CONFERENCES" right={<GearButton />} scroll>
+        <View style={styles.empty}>
+          <Ionicons name="layers-outline" size={48} color={colors.textDim} />
+          <Vga size={fontSize.body} color={colors.textMuted} style={styles.emptyText}>
+            No conferences yet
+          </Vga>
+          <Mono size={fontSize.listMeta} color={colors.textDim} style={styles.emptyHint}>
+            Sync a packet to load this board's message areas.
+          </Mono>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="CONFERENCES" right={<GearButton />} scroll>
@@ -39,10 +57,10 @@ export function ConferencesScreen() {
                   {conf.isNet && <Chip label="NET" />}
                 </View>
                 <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.subline}>
-                  {`${areasForConference(conf.id).length} areas · ${conf.tag}`}
+                  {`${areasForConference(areas, conf.id).length} areas · ${conf.tag}`}
                 </Mono>
               </View>
-              <UnreadPill count={unreadInConference(messages, conf.id, readIds)} />
+              <UnreadPill count={unreadInConference(messages, areas, conf.id, readIds)} />
             </ListRow>
           );
         })}
@@ -65,4 +83,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   subline: { marginTop: 3 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: spacing.sm },
+  emptyText: {},
+  emptyHint: {},
 });

@@ -52,7 +52,10 @@ export interface Message {
   body: string;
   isPrivate: boolean;
   preview: string;
+  /** Parent message number this replies to (QWK offset-108 reference), if any. */
   reference?: number;
+  /** RFC-style Message-ID from HEADERS.DAT — the In-Reply-To target when replying. */
+  messageId?: string;
 }
 
 export interface Draft {
@@ -64,6 +67,10 @@ export interface Draft {
   conferenceNumber: number;
   priv: boolean;
   body: string;
+  /** Parent message number, for in-packet threading (QWK offset 108). */
+  reference?: number;
+  /** Parent Message-ID, for durable HEADERS.DAT In-Reply-To threading. */
+  inReplyTo?: string;
 }
 
 export interface Packet {

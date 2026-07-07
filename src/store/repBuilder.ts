@@ -14,6 +14,9 @@ export function draftToReply(d: Draft): ReplyDraft {
     conference: d.conferenceNumber,
     body: d.body,
     isPrivate: d.priv,
+    // Threading: in-packet parent number (offset 108) + durable In-Reply-To.
+    reference: d.reference,
+    inReplyTo: d.inReplyTo,
   };
 }
 

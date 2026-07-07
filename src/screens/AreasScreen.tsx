@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen, Card, Eyebrow, ListRow, Vga, Mono, UnreadPill } from '../components';
 import { colors, fontSize, spacing, radius } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, conferences, areasForConference, unreadInArea, unreadInConference } from '../store/useStore';
+import { useStore, areasForConference, unreadInArea, unreadInConference } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Areas'>;
 
@@ -13,9 +13,11 @@ export function AreasScreen({ route, navigation }: Props) {
   const { conferenceId } = route.params;
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
+  const conferences = useStore((s) => s.conferences);
+  const areas = useStore((s) => s.areas);
   const conf = conferences.find((c) => c.id === conferenceId);
-  const list = areasForConference(conferenceId);
-  const totalUnread = unreadInConference(messages, conferenceId, readIds);
+  const list = areasForConference(areas, conferenceId);
+  const totalUnread = unreadInConference(messages, areas, conferenceId, readIds);
 
   return (
     <Screen title={(conf?.name ?? 'AREAS').toUpperCase()} onBack={() => navigation.goBack()} scroll>

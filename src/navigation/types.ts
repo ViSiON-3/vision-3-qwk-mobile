@@ -19,6 +19,10 @@ export type RootStackParamList = {
     conferenceNumber: number;
     areaName: string;
     priv?: boolean;
+    /** Parent message number, when composing a threaded reply. */
+    reference?: number;
+    /** Parent Message-ID, for durable In-Reply-To threading. */
+    inReplyTo?: string;
   };
   Settings: undefined;
   Boards: undefined;

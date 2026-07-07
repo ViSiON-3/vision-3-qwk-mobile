@@ -1,4 +1,4 @@
-import { unzipSync } from 'fflate';
+import { unzipSync, strFromU8 } from 'fflate';
 import { buildRepFromDrafts } from './repBuilder';
 import { parseMessagesDat } from '../qwk';
 import { Draft } from './types';
@@ -22,5 +22,22 @@ describe('buildRepFromDrafts', () => {
     const a = buildRepFromDrafts('V3HQ', drafts);
     const b = buildRepFromDrafts('V3HQ', drafts);
     expect(Array.from(a)).toEqual(Array.from(b));
+  });
+
+  it('carries reply threading — parent number (offset 108) + In-Reply-To Message-ID', () => {
+    const threaded: Draft[] = [
+      {
+        id: 'd1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General',
+        conferenceNumber: 3, priv: false, body: 'add me', reference: 2048, inReplyTo: '<2048@fsx>',
+      },
+    ];
+    const files = unzipSync(buildRepFromDrafts('V3HQ', threaded));
+    const msgs = parseMessagesDat(files['V3HQ.MSG']);
+    expect(msgs[0].reference).toBe(2048); // in-packet numeric reference
+    // Durable In-Reply-To rides in HEADERS.DAT.
+    expect(files['HEADERS.DAT']).toBeDefined();
+    const headers = strFromU8(files['HEADERS.DAT']);
+    expect(headers).toContain('In-Reply-To');
+    expect(headers).toContain('<2048@fsx>');
   });
 });

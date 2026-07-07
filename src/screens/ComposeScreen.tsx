@@ -9,7 +9,7 @@ import { useStore, activeBoard } from '../store/useStore';
 type Props = NativeStackScreenProps<RootStackParamList, 'Compose'>;
 
 export function ComposeScreen({ navigation, route }: Props) {
-  const { toHandle, conferenceNumber, areaName, priv } = route.params;
+  const { toHandle, conferenceNumber, areaName, priv, reference, inReplyTo } = route.params;
   const board = useStore(activeBoard);
   const addDraft = useStore((s) => s.addDraft);
   const toast = useToast();
@@ -30,6 +30,8 @@ export function ComposeScreen({ navigation, route }: Props) {
       conferenceNumber,
       priv: !!priv,
       body,
+      reference,
+      inReplyTo,
     });
     navigation.goBack();
     toast('Saved to Outbox');
