@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { Board, Draft, ImportReport, Message, Packet, Settings } from './types';
+import { Board, Conference, Draft, ImportReport, Message, Packet, Settings } from './types';
 import { mockBoards } from './mockData';
-import { conferences, areas, areasForConference, PRIVATE_CONFERENCE } from './taxonomy';
+import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } from './taxonomy';
 import { buildSampleQwk } from './sampleQwk';
-import { parsePacketToMessages } from './viewModel';
+import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
 import { makeSession, pushDrafts, describeSyncError } from './net';
 import { QwkSession } from '../api';
@@ -55,6 +55,9 @@ export interface AppState {
 
   /** Messages parsed from the active board's cached packets. */
   messages: Message[];
+  /** Conference/area taxonomy for the active board, built from CONTROL.DAT. */
+  conferences: Conference[];
+  areas: AreaConfig[];
   readIds: Set<string>;
 
   drafts: Draft[];
@@ -115,17 +118,24 @@ export const useStore = create<AppState>((set, get) => {
 
   const activeBoardOf = (): Board | undefined => get().boards.find((b) => b.id === get().activeBoardId);
 
-  /** Re-parse the active board's cached packets into state.messages. */
+  /** Re-parse the active board's cached packets into state.messages and rebuild
+   * the conference/area taxonomy from the union of their CONTROL.DAT entries. */
   const reloadMessages = async () => {
     const board = activeBoardOf();
-    if (!board) return set({ messages: [] });
+    if (!board) return set({ messages: [], conferences: [], areas: [] });
     const byId = new Map<string, Message>();
+    const confByNum = new Map<number, string>(); // union of CONTROL.DAT conferences
     for (const p of get().packets.filter((pk) => pk.bbsId === board.bbsId)) {
       const bytes = await readPacketBytes(p.id);
       if (!bytes) continue;
-      for (const m of parsePacketToMessages(bytes, board.bbsId)) byId.set(m.id, m);
+      const { messages, qwkConferences } = parsePacket(bytes, board.bbsId);
+      for (const m of messages) byId.set(m.id, m);
+      for (const c of qwkConferences) if (!confByNum.has(c.number)) confByNum.set(c.number, c.name);
     }
-    set({ messages: [...byId.values()] });
+    const { conferences, areas } = buildTaxonomy(
+      [...confByNum.entries()].map(([number, name]) => ({ number, name }))
+    );
+    set({ messages: [...byId.values()], conferences, areas });
   };
 
   /** Build + cache a sample .QWK for the active board (stands in for download). */
@@ -136,13 +146,14 @@ export const useStore = create<AppState>((set, get) => {
     const id = nextId('pkt');
     writePacketBytes(id, bytes);
     const parsed = readQwkPacket(bytes);
+    const tax = buildTaxonomy(parsed.control.conferences);
     const meta: Packet = {
       id,
       bbsId: board.bbsId,
       file: `${board.bbsId}.QWK`,
       msgs: parsed.messages.length,
-      confs: conferences.length,
-      areas: areas.length,
+      confs: tax.conferences.length,
+      areas: tax.areas.length,
       kb: Math.max(1, Math.round(bytes.length / 1024)),
       date: stamp(),
     };
@@ -165,6 +176,8 @@ export const useStore = create<AppState>((set, get) => {
     lastPacket: null,
 
     messages: [],
+    conferences: [],
+    areas: [],
     readIds: new Set<string>(),
 
     drafts: [],
@@ -248,13 +261,14 @@ export const useStore = create<AppState>((set, get) => {
         const id = nextId('pkt');
         writePacketBytes(id, res.bytes);
         const parsed = readQwkPacket(res.bytes);
+        const tax = buildTaxonomy(parsed.control.conferences);
         const meta: Packet = {
           id,
           bbsId: board.bbsId,
           file: `${board.bbsId}.QWK`,
           msgs: parsed.messages.length,
-          confs: parsed.control.conferences.length,
-          areas: parsed.control.conferences.length,
+          confs: tax.conferences.length,
+          areas: tax.areas.length,
           kb: Math.max(1, Math.round(res.bytes.length / 1024)),
           date: stamp(),
         };
@@ -401,8 +415,8 @@ export const useStore = create<AppState>((set, get) => {
   };
 });
 
-// --- taxonomy re-exports (static config) ---
-export { conferences, areas, areasForConference };
+// --- taxonomy helper re-export (conferences/areas live in store state) ---
+export { areasForConference };
 
 // --- selectors over the dynamic message list ---
 
@@ -418,8 +432,13 @@ export function privateMessages(messages: Message[]): Message[] {
 export function unreadInArea(messages: Message[], areaId: string, readIds: Set<string>): number {
   return messagesForArea(messages, areaId).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
 }
-export function unreadInConference(messages: Message[], conferenceId: string, readIds: Set<string>): number {
-  return areasForConference(conferenceId).reduce((n, a) => n + unreadInArea(messages, a.id, readIds), 0);
+export function unreadInConference(
+  messages: Message[],
+  areas: AreaConfig[],
+  conferenceId: string,
+  readIds: Set<string>
+): number {
+  return areasForConference(areas, conferenceId).reduce((n, a) => n + unreadInArea(messages, a.id, readIds), 0);
 }
 export function privateUnread(messages: Message[], readIds: Set<string>): number {
   return privateMessages(messages).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);

@@ -1,5 +1,14 @@
 import { buildQwkPacket, QwkMessageInput } from '../qwk';
-import { packetConferences, PRIVATE_CONFERENCE } from './taxonomy';
+import { PRIVATE_CONFERENCE } from './taxonomy';
+
+/** CONTROL.DAT conference directory for the sample packet. "Network: Area"
+ * names exercise the server-driven taxonomy grouping; numbers match the
+ * conferences used by SAMPLE_MESSAGES below (0 = private mail). */
+const SAMPLE_CONFERENCES = [
+  { number: PRIVATE_CONFERENCE, name: 'Personal' },
+  { number: 3, name: 'fsxNet: General' },
+  { number: 6, name: 'V3Net: Development' },
+];
 
 /**
  * Sample message content used to synthesize a real .QWK packet for the offline
@@ -81,7 +90,7 @@ export function buildSampleQwk(bbsId: string): Uint8Array {
       bbsId,
       bbsName: 'ViSiON/3 HQ',
       sysop: 'Prime',
-      conferences: packetConferences(),
+      conferences: SAMPLE_CONFERENCES,
     },
     messages: SAMPLE_MESSAGES,
   });

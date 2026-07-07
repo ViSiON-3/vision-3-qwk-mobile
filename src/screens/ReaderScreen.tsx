@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button } from '../components';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, messagesForArea, areas } from '../store/useStore';
+import { useStore, messagesForArea } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
 
@@ -27,6 +27,7 @@ export function ReaderScreen({ navigation, route }: Props) {
   const { areaId, messageId } = route.params;
   const markRead = useStore((s) => s.markRead);
   const messages = useStore((s) => s.messages);
+  const areas = useStore((s) => s.areas);
 
   const list = messagesForArea(messages, areaId);
   const index = list.findIndex((m) => m.id === messageId);
@@ -61,6 +62,9 @@ export function ReaderScreen({ navigation, route }: Props) {
       conferenceNumber: area?.qwkConference ?? 0,
       areaName: area?.name ?? '',
       priv: msg.isPrivate,
+      // Thread the reply back to this message (in-packet ref + durable Message-ID).
+      reference: msg.number,
+      inReplyTo: msg.messageId,
     });
   }
 

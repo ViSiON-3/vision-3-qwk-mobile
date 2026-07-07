@@ -1,52 +1,83 @@
 import { Area, Conference } from './types';
 
 /**
- * The board's conference/area structure. In a full build this comes from the
- * server/board config; for the prototype it's static client config. Each area
- * maps to a QWK conference number; parsed packet messages are grouped into areas
- * by that number. Conference 0 is private email (the MAIL tab).
+ * The board's conference/area structure, derived at runtime from the synced
+ * packet's CONTROL.DAT (Phase 8: server-driven, not static client config).
+ *
+ * Each QWK conference becomes one Area with a stable id `a<qwkConference>`, so
+ * parsed messages map to an area purely by their conference number. Areas are
+ * grouped into UI Conferences by an optional "Network: Area" name prefix — e.g.
+ * "fsxNet: General" groups under a networked "fsxNet" conference, while a bare
+ * "General Discussion" falls under a local conference. Conference 0 is private
+ * email (the MAIL tab) and is excluded from the public taxonomy.
  */
 
 export const PRIVATE_AREA_ID = 'mail';
 export const PRIVATE_CONFERENCE = 0;
-
-export const conferences: Conference[] = [
-  { id: 'c0', number: 0, name: 'Local', tag: 'LOCAL', isNet: false },
-  { id: 'c1', number: 1, name: 'fsxNet', tag: 'FSX_GEN', isNet: true },
-  { id: 'c2', number: 2, name: 'V3Net', tag: 'V3_MAIN', isNet: true },
-  { id: 'c3', number: 3, name: 'FidoNet', tag: 'FIDO', isNet: true },
-];
 
 /** Areas carry the QWK conference number they map to. */
 export interface AreaConfig extends Area {
   qwkConference: number;
 }
 
-export const areas: AreaConfig[] = [
-  { id: 'a0', conferenceId: 'c0', number: 1, name: 'General', tag: 'GENERAL', qwkConference: 1 },
-  { id: 'a1', conferenceId: 'c0', number: 2, name: 'Sysop Announcements', tag: 'ANNOUNCE', qwkConference: 2 },
-  { id: 'a2', conferenceId: 'c1', number: 1, name: 'fsxNet General', tag: 'FSX_GEN', qwkConference: 3 },
-  { id: 'a3', conferenceId: 'c1', number: 2, name: 'BBS Ads', tag: 'FSX_ADS', qwkConference: 4 },
-  { id: 'a4', conferenceId: 'c1', number: 3, name: 'Retro Computing', tag: 'FSX_RETRO', qwkConference: 5 },
-  { id: 'a5', conferenceId: 'c2', number: 1, name: 'V3 Development', tag: 'V3_DEV', qwkConference: 6 },
-  { id: 'a6', conferenceId: 'c2', number: 2, name: 'V3 Support', tag: 'V3_HELP', qwkConference: 7 },
-  { id: 'a7', conferenceId: 'c3', number: 1, name: 'FidoNews', tag: 'FIDONEWS', qwkConference: 8 },
-];
-
-/** All conference numbers that appear in a packet's CONTROL.DAT (0 = personal). */
-export function packetConferences(): { number: number; name: string }[] {
-  const list = [{ number: PRIVATE_CONFERENCE, name: 'Personal' }];
-  for (const a of areas) {
-    const conf = conferences.find((c) => c.id === a.conferenceId);
-    list.push({ number: a.qwkConference, name: `${conf?.name ?? ''}: ${a.name}` });
-  }
-  return list;
+/** Stable UI area id for a QWK conference number (matches parsed messages). */
+export function areaIdForConference(conf: number): string {
+  return `a${conf}`;
 }
 
-export function areaByQwkConference(conf: number): AreaConfig | undefined {
+function slug(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 12);
+}
+
+/**
+ * Build the UI conference/area taxonomy from a packet's CONTROL.DAT conference
+ * list. Conference 0 (private mail) is skipped; the rest each become an area,
+ * grouped into conferences by a "Network:" name prefix. Duplicate conference
+ * numbers keep their first-seen name. Deterministic given the input order.
+ */
+export function buildTaxonomy(
+  qwkConferences: { number: number; name: string }[]
+): { conferences: Conference[]; areas: AreaConfig[] } {
+  const conferences: Conference[] = [];
+  const areas: AreaConfig[] = [];
+  const byNet = new Map<string, Conference>();
+  const seen = new Set<number>();
+
+  for (const qc of qwkConferences) {
+    if (qc.number === PRIVATE_CONFERENCE || seen.has(qc.number)) continue;
+    seen.add(qc.number);
+
+    const colon = qc.name.indexOf(':');
+    const isNet = colon > 0;
+    const netName = (isNet ? qc.name.slice(0, colon) : 'Local').trim() || 'Local';
+    const areaName = (isNet ? qc.name.slice(colon + 1) : qc.name).trim() || `Conference ${qc.number}`;
+
+    let conf = byNet.get(netName);
+    if (!conf) {
+      conf = { id: `c${byNet.size}`, number: byNet.size, name: netName, tag: slug(netName) || 'LOCAL', isNet };
+      byNet.set(netName, conf);
+      conferences.push(conf);
+    } else if (isNet) {
+      conf.isNet = true;
+    }
+
+    const number = areas.reduce((n, a) => (a.conferenceId === conf!.id ? n + 1 : n), 0) + 1;
+    areas.push({
+      id: areaIdForConference(qc.number),
+      conferenceId: conf.id,
+      number,
+      name: areaName,
+      tag: slug(areaName) || `CONF${qc.number}`,
+      qwkConference: qc.number,
+    });
+  }
+  return { conferences, areas };
+}
+
+export function areaByQwkConference(areas: AreaConfig[], conf: number): AreaConfig | undefined {
   return areas.find((a) => a.qwkConference === conf);
 }
 
-export function areasForConference(conferenceId: string): AreaConfig[] {
+export function areasForConference(areas: AreaConfig[], conferenceId: string): AreaConfig[] {
   return areas.filter((a) => a.conferenceId === conferenceId);
 }

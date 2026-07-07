@@ -12,11 +12,11 @@ describe('parsePacketToMessages (sample packet round trip)', () => {
     expect(priv.map((m) => m.subject)).toContain('Welcome to ViSiON/3 HQ');
   });
 
-  it('groups public messages into the area matching their qwkConference', () => {
-    // qwkConference 3 -> area a2 (fsxNet General), 6 -> a5 (V3 Development).
-    const fsx = messages.filter((m) => m.areaId === 'a2');
+  it('maps public messages to an area by their qwkConference number', () => {
+    // Area id is `a<qwkConference>`: conference 3 -> a3, conference 6 -> a6.
+    const fsx = messages.filter((m) => m.areaId === 'a3');
     expect(fsx.map((m) => m.number).sort()).toEqual([2048, 2049]);
-    expect(messages.filter((m) => m.areaId === 'a5')).toHaveLength(1);
+    expect(messages.filter((m) => m.areaId === 'a6')).toHaveLength(1);
   });
 
   it('assigns stable ids so read state survives a re-parse', () => {
