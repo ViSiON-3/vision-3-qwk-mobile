@@ -41,6 +41,7 @@ export function buildTaxonomy(
   const conferences: Conference[] = [];
   const areas: AreaConfig[] = [];
   const byNet = new Map<string, Conference>();
+  const areaCount = new Map<string, number>(); // conferenceId -> areas assigned so far
   const seen = new Set<number>();
 
   for (const qc of qwkConferences) {
@@ -61,7 +62,8 @@ export function buildTaxonomy(
       conf.isNet = true;
     }
 
-    const number = areas.reduce((n, a) => (a.conferenceId === conf!.id ? n + 1 : n), 0) + 1;
+    const number = (areaCount.get(conf.id) ?? 0) + 1;
+    areaCount.set(conf.id, number);
     areas.push({
       id: areaIdForConference(qc.number),
       conferenceId: conf.id,

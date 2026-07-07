@@ -123,15 +123,22 @@ export const useStore = create<AppState>((set, get) => {
   const reloadMessages = async () => {
     const board = activeBoardOf();
     if (!board) return set({ messages: [], conferences: [], areas: [] });
+    const boardId = board.id;
+    const bbsId = board.bbsId;
     const byId = new Map<string, Message>();
     const confByNum = new Map<number, string>(); // union of CONTROL.DAT conferences
-    for (const p of get().packets.filter((pk) => pk.bbsId === board.bbsId)) {
+    for (const p of get().packets.filter((pk) => pk.bbsId === bbsId)) {
       const bytes = await readPacketBytes(p.id);
       if (!bytes) continue;
-      const { messages, qwkConferences } = parsePacket(bytes, board.bbsId);
-      for (const m of messages) byId.set(m.id, m);
+      const { messages, qwkConferences } = parsePacket(bytes, bbsId);
+      // Packets are stored newest-first, so keep the first (newest) copy of each
+      // stable id — an older cached packet must not clobber newer metadata.
+      for (const m of messages) if (!byId.has(m.id)) byId.set(m.id, m);
       for (const c of qwkConferences) if (!confByNum.has(c.number)) confByNum.set(c.number, c.name);
     }
+    // Bail if the active board changed while we awaited reads — a stale reload
+    // must not overwrite the current board's messages/taxonomy.
+    if (get().activeBoardId !== boardId) return;
     const { conferences, areas } = buildTaxonomy(
       [...confByNum.entries()].map(([number, name]) => ({ number, name }))
     );
