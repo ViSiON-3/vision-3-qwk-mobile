@@ -50,6 +50,18 @@ describe('buildTaxonomy (server-driven from CONTROL.DAT)', () => {
     expect(a2[0].name).toBe('First');
   });
 
+  it('does not merge the Local fallback with a network literally named "Local"', () => {
+    const { conferences: cs, areas: as } = buildTaxonomy([
+      { number: 1, name: 'General Discussion' }, // bare -> Local fallback
+      { number: 2, name: 'Local: Chat' }, // real network named "Local"
+    ]);
+    expect(cs).toHaveLength(2);
+    const fallback = cs.find((c) => !c.isNet)!;
+    const net = cs.find((c) => c.isNet)!;
+    expect(areasForConference(as, fallback.id).map((a) => a.name)).toEqual(['General Discussion']);
+    expect(areasForConference(as, net.id).map((a) => a.name)).toEqual(['Chat']);
+  });
+
   it('returns empty taxonomy for an empty or private-only directory', () => {
     expect(buildTaxonomy([]).areas).toHaveLength(0);
     expect(buildTaxonomy([{ number: 0, name: 'Personal' }]).conferences).toHaveLength(0);

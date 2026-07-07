@@ -53,13 +53,14 @@ export function buildTaxonomy(
     const netName = (isNet ? qc.name.slice(0, colon) : 'Local').trim() || 'Local';
     const areaName = (isNet ? qc.name.slice(colon + 1) : qc.name).trim() || `Conference ${qc.number}`;
 
-    let conf = byNet.get(netName);
+    // Namespace the grouping key by net-ness so the bare-name "Local" fallback
+    // can't merge with a network literally named "Local:".
+    const netKey = (isNet ? 'N:' : 'L:') + netName;
+    let conf = byNet.get(netKey);
     if (!conf) {
       conf = { id: `c${byNet.size}`, number: byNet.size, name: netName, tag: slug(netName) || 'LOCAL', isNet };
-      byNet.set(netName, conf);
+      byNet.set(netKey, conf);
       conferences.push(conf);
-    } else if (isNet) {
-      conf.isNet = true;
     }
 
     const number = (areaCount.get(conf.id) ?? 0) + 1;
