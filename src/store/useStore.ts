@@ -268,18 +268,27 @@ export const useStore = create<AppState>((set, get) => {
         const id = nextId('pkt');
         writePacketBytes(id, res.bytes);
         const parsed = readQwkPacket(res.bytes);
+        // Adopt the server's real BBSID from CONTROL.DAT. The board's id is
+        // initially derived from its name, which may not match the server —
+        // and a mismatch gets REP uploads rejected (wrongBBS). Everything keyed
+        // by bbsId (packet meta, message ids, the .REP block-0 id) uses this.
+        const bbsId = parsed.control.bbsId || board.bbsId;
         const tax = buildTaxonomy(parsed.control.conferences);
         const meta: Packet = {
           id,
-          bbsId: board.bbsId,
-          file: `${board.bbsId}.QWK`,
+          bbsId,
+          file: `${bbsId}.QWK`,
           msgs: parsed.messages.length,
           confs: tax.conferences.length,
           areas: tax.areas.length,
           kb: Math.max(1, Math.round(res.bytes.length / 1024)),
           date: stamp(),
         };
-        set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
+        set((s) => ({
+          boards: bbsId === board.bbsId ? s.boards : s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)),
+          packets: [meta, ...s.packets],
+          lastPacket: meta,
+        }));
         await reloadMessages();
         set({ syncing: false });
         persist();
