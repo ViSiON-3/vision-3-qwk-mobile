@@ -268,18 +268,36 @@ export const useStore = create<AppState>((set, get) => {
         const id = nextId('pkt');
         writePacketBytes(id, res.bytes);
         const parsed = readQwkPacket(res.bytes);
+        // Adopt the server's real BBSID from CONTROL.DAT. The board's id is
+        // initially derived from its name, which may not match the server —
+        // and a mismatch gets REP uploads rejected (wrongBBS). Everything keyed
+        // by bbsId (packet meta, message ids, the .REP block-0 id) uses this.
+        const bbsId = parsed.control.bbsId || board.bbsId;
         const tax = buildTaxonomy(parsed.control.conferences);
         const meta: Packet = {
           id,
-          bbsId: board.bbsId,
-          file: `${board.bbsId}.QWK`,
+          bbsId,
+          file: `${bbsId}.QWK`,
           msgs: parsed.messages.length,
           confs: tax.conferences.length,
           areas: tax.areas.length,
           kb: Math.max(1, Math.round(res.bytes.length / 1024)),
           date: stamp(),
         };
-        set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
+        const adopted = bbsId !== board.bbsId;
+        set((s) => ({
+          boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)) : s.boards,
+          // Re-key this board's existing packets to the adopted id too, so
+          // reloadMessages (which filters by bbsId) keeps showing their history
+          // instead of orphaning it under the old derived id.
+          packets: [
+            meta,
+            ...(adopted
+              ? s.packets.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
+              : s.packets),
+          ],
+          lastPacket: meta,
+        }));
         await reloadMessages();
         set({ syncing: false });
         persist();
