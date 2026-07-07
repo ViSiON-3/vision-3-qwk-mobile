@@ -27,5 +27,6 @@ describe('fingerprint', () => {
     expect(fingerprintsEqual(REAL, 'EE:04:35:D6')).toBe(false); // rotated cert
     expect(fingerprintsEqual('', '')).toBe(false); // nothing to compare
     expect(fingerprintsEqual(REAL, undefined)).toBe(false);
+    expect(fingerprintsEqual('AA', 'AA')).toBe(false); // partial != a real fingerprint
   });
 });

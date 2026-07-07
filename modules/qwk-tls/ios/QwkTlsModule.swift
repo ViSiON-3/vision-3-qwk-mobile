@@ -201,14 +201,23 @@ private final class QwkTlsProbe: NSObject, URLSessionDelegate {
   ) {
     guard
       challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-      let trust = challenge.protectionSpace.serverTrust,
-      let hex = leafSha256Hex(trust)
+      let trust = challenge.protectionSpace.serverTrust
     else {
+      // Not a server-trust challenge (won't happen for the probe); let the
+      // system handle it rather than trusting anything ourselves.
       completionHandler(.performDefaultHandling, nil)
       return
     }
-    // Capture the fingerprint (TOFU) and stop — don't trust the connection.
-    completionHandler(.cancelAuthenticationChallenge, nil)
+    guard let hex = leafSha256Hex(trust) else {
+      // Server-trust challenge but no readable cert — fail, never trust it.
+      fail("no certificate presented")
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+    // Capture the fingerprint (TOFU) and settle BEFORE cancelling, so the task
+    // completion the cancellation triggers sees `settled` and no-ops (no race).
+    // The connection itself is never trusted.
     settle(hex)
+    completionHandler(.cancelAuthenticationChallenge, nil)
   }
 }

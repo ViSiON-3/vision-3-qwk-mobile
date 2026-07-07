@@ -20,10 +20,9 @@ export function formatFingerprint(fp: string): string {
   return n.match(/.{1,2}/g)?.join(':') ?? n;
 }
 
-/** True when two fingerprints are the same cert, ignoring separators/case.
- * Two blank/empty values are not considered equal (nothing to compare). */
+/** True when two values are the same full SHA-256 cert fingerprint, ignoring
+ * separators/case. Partial/invalid inputs (and blanks) are never equal. */
 export function fingerprintsEqual(a: string | undefined, b: string | undefined): boolean {
   const na = normalizeFingerprint(a ?? '');
-  const nb = normalizeFingerprint(b ?? '');
-  return na.length > 0 && na === nb;
+  return isValidFingerprint(na) && na === normalizeFingerprint(b ?? '');
 }

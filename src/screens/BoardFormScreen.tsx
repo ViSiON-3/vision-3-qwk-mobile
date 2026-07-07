@@ -11,7 +11,6 @@ import {
   formatFingerprint,
   fingerprintsEqual,
   probeServerFingerprint,
-  PinningUnavailableError,
 } from '../api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardForm'>;
@@ -46,15 +45,14 @@ export function BoardFormScreen({ navigation, route }: Props) {
       toast('Enter the host first');
       return;
     }
-    setProbing(true);
+    setProbing(true); // host/port inputs lock while probing, so h stays the probed host
     try {
       const fp = await probeServerFingerprint(h, parseInt(port, 10) || 8666);
       setChanged(!!existing?.fingerprint && !fingerprintsEqual(fp, existing.fingerprint));
       setFingerprint(formatFingerprint(fp));
       toast('Fingerprint captured — verify, then save');
     } catch (e) {
-      if (e instanceof PinningUnavailableError) toast('Fetching needs a dev build (not Expo Go)');
-      else toast(e instanceof Error ? e.message : 'Could not reach the server');
+      toast(e instanceof Error ? e.message : 'Could not reach the server');
     } finally {
       setProbing(false);
     }
@@ -108,6 +106,7 @@ export function BoardFormScreen({ navigation, route }: Props) {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
+            editable={!probing}
           />
         </Field>
         <Field label="PORT" style={styles.flex1}>
@@ -118,6 +117,7 @@ export function BoardFormScreen({ navigation, route }: Props) {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
             keyboardType="number-pad"
+            editable={!probing}
           />
         </Field>
       </View>
