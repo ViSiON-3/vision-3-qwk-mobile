@@ -279,6 +279,14 @@ zip bytes (extends the existing `rep`/`repBuilder` tests).
 - `ReaderScreen` renders them below the body with a `SAVED` chip; tap →
   `navigate('Compose', { mode: 'reply', editDraftId })`.
 
+> **Known limitation.** `Draft` has no board field, so "matching the active
+> board" above is aspirational: with multiple configured boards, a
+> `(reference, conferenceNumber)` collision can show board A's draft under
+> board B's message in the Reader, and `uploadRep` likewise uploads all
+> matching drafts regardless of which board is active (pre-existing).
+> `Draft.boardId` scoping — both for display here and for `uploadRep` — is
+> deferred to a follow-up.
+
 ---
 
 ## 7. Store & navigation deltas

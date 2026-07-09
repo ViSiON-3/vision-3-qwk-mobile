@@ -1273,7 +1273,7 @@ Expected: PASS.
 
 Run: `npm start`.
 - Open a **public** message → REPLY → the options sheet shows both **Private?** and **Quote?** toggles. Toggle Quote on → START → the editor body is seeded with the ` <author> wrote:` attribution + `II> `-prefixed, 79-wrapped quote.
-- Open a **private-mail** message → REPLY → the sheet shows "PRIVATE MAIL — always private", no Private toggle, no Quote toggle; START → editor shows the `PRIVATE` chip.
+- Open a **private-mail** message → REPLY → the sheet shows "PRIVATE MAIL — always private", no Private toggle, but the **Quote?** toggle is present (shown for any reply with a parent body, private mail included); START → editor shows the `PRIVATE` chip.
 - Save a quoted reply → Outbox → Upload (demo mode) → confirm it round-trips.
 
 - [ ] **Step 5: Commit**
