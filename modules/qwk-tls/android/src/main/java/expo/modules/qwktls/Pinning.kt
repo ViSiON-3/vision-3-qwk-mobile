@@ -52,6 +52,9 @@ fun pinnedClient(pinnedSha256: String, connectTimeoutSec: Long, readTimeoutSec: 
   return OkHttpClient.Builder()
     .sslSocketFactory(context.socketFactory, trustManager)
     .hostnameVerifier { _, _ -> true }
+    // Never follow a redirect out of TLS — a cleartext hop would carry the
+    // session headers outside the pin entirely (iOS gets this from ATS).
+    .followSslRedirects(false)
     .connectTimeout(connectTimeoutSec, TimeUnit.SECONDS)
     .readTimeout(readTimeoutSec, TimeUnit.SECONDS)
     .writeTimeout(readTimeoutSec, TimeUnit.SECONDS)

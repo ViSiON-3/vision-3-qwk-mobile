@@ -91,9 +91,10 @@ object QwkTlsDownload {
           }
         }
       }
-      // rename(2) atomically replaces an existing destination on Android; only
-      // if that fails fall back to delete+rename, so a previously-good file is
-      // never destroyed before its replacement is known to land.
+      // rename(2) atomically replaces an existing destination on Android, so
+      // the common path never destroys a previously-good file. The fallback
+      // (delete+rename, for filesystems that refuse rename-over) still has an
+      // unavoidable window between delete and rename.
       if (!part.renameTo(dest)) {
         if (!dest.exists() || !dest.delete() || !part.renameTo(dest)) {
           throw IOException("could not move download into place")
