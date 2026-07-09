@@ -36,6 +36,8 @@ export function ComposeScreen({ navigation, route }: Props) {
 
   const commitSave = () => {
     const fields = {
+      // An edited draft keeps the board it was composed on.
+      boardId: editing?.boardId ?? board?.id ?? '',
       to: to.trim() || 'All',
       from: board?.handle ?? '',
       subject: subject.trim() || (mode === 'reply' ? 'Re:' : '(no subject)'),

@@ -279,13 +279,12 @@ zip bytes (extends the existing `rep`/`repBuilder` tests).
 - `ReaderScreen` renders them below the body with a `SAVED` chip; tap →
   `navigate('Compose', { mode: 'reply', editDraftId })`.
 
-> **Known limitation.** `Draft` has no board field, so "matching the active
-> board" above is aspirational: with multiple configured boards, a
-> `(reference, conferenceNumber)` collision can show board A's draft under
-> board B's message in the Reader, and `uploadRep` likewise uploads all
-> matching drafts regardless of which board is active (pre-existing).
-> `Draft.boardId` scoping — both for display here and for `uploadRep` — is
-> deferred to a follow-up.
+> **Resolved (2026-07-09).** `Draft.boardId` records the board a draft was
+> composed on: `draftsForMessage` filters by it (no cross-board
+> `(reference, conferenceNumber)` collisions in the Reader), `uploadRep`
+> compiles and clears only the active board's drafts (`draftsForBoard`), and
+> drafts persisted before the field existed adopt the active board on hydrate
+> (`migrateDraftBoardIds`).
 
 ---
 

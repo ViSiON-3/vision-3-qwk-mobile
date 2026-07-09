@@ -60,6 +60,8 @@ export interface Message {
 
 export interface Draft {
   id: string;
+  /** Board the draft was composed on — scopes Reader display and REP upload. */
+  boardId: string;
   to: string;
   from: string;
   subject: string;

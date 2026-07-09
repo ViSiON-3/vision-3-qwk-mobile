@@ -5,8 +5,8 @@ import { buildQuote } from '../qwk/quote';
 import { Draft } from './types';
 
 const drafts: Draft[] = [
-  { id: 'd1', to: 'Prime', from: 'Zaphod', subject: 'Re: Welcome', areaName: '', conferenceNumber: 0, priv: true, body: 'thanks!' },
-  { id: 'd2', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General', conferenceNumber: 3, priv: false, body: 'add me' },
+  { id: 'd1', boardId: 'b1', to: 'Prime', from: 'Zaphod', subject: 'Re: Welcome', areaName: '', conferenceNumber: 0, priv: true, body: 'thanks!' },
+  { id: 'd2', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General', conferenceNumber: 3, priv: false, body: 'add me' },
 ];
 
 describe('buildRepFromDrafts', () => {
@@ -28,7 +28,7 @@ describe('buildRepFromDrafts', () => {
   it('carries reply threading — parent number (offset 108) + In-Reply-To Message-ID', () => {
     const threaded: Draft[] = [
       {
-        id: 'd1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General',
+        id: 'd1', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General',
         conferenceNumber: 3, priv: false, body: 'add me', reference: 2048, inReplyTo: '<2048@fsx>',
       },
     ];
@@ -71,7 +71,7 @@ describe('finalizeReplyBody', () => {
 describe('buildRepFromDrafts with a tag line', () => {
   it('stamps the tag line into the packed body exactly once', () => {
     const d: Draft[] = [
-      { id: 'd1', to: 'Avon', from: 'Zaphod', subject: 'Re: x', areaName: '', conferenceNumber: 3, priv: false, body: 'hello' },
+      { id: 'd1', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: x', areaName: '', conferenceNumber: 3, priv: false, body: 'hello' },
     ];
     const once = buildRepFromDrafts('V3HQ', d, TAG);
     const twice = buildRepFromDrafts('V3HQ', d, TAG);

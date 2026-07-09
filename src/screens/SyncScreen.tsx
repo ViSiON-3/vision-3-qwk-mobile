@@ -4,7 +4,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button, GearButton, ConsoleProgress, useToast } from '../components';
 import { TabParamList } from '../navigation/types';
-import { useStore, activeBoard, unreadTotal, privateUnread } from '../store/useStore';
+import { useStore, activeBoard, unreadTotal, privateUnread, draftsForBoard } from '../store/useStore';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/ViSiON3.png');
@@ -24,7 +24,7 @@ export function SyncScreen({ navigation }: Props) {
   const board = useStore(activeBoard);
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
-  const drafts = useStore((s) => s.drafts);
+  const drafts = draftsForBoard(useStore((s) => s.drafts), board?.id ?? '');
   const syncing = useStore((s) => s.syncing);
   const downloadProgress = useStore((s) => s.downloadProgress);
   const lastPacket = useStore((s) => s.lastPacket);

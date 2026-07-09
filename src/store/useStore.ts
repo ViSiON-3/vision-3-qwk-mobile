@@ -7,6 +7,7 @@ import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
 import { currentTagline } from './appTagline';
 import { makeSession, pushDrafts, describeSyncError } from './net';
+import { draftsForBoard, migrateDraftBoardIds } from './draftSelectors';
 import { QwkSession, DownloadToFileResult } from '../api';
 import { readQwkPacket } from '../qwk';
 import {
@@ -212,11 +213,13 @@ export const useStore = create<AppState>((set, get) => {
         const boards: Board[] = await Promise.all(
           base.map(async (b) => ({ ...b, pass: await getBoardPassword(b.id) }))
         );
+        const activeBoardId = persisted.activeBoardId || mockBoards[0].id;
         set({
           boards,
-          activeBoardId: persisted.activeBoardId || mockBoards[0].id,
+          activeBoardId,
           settings: { ...DEFAULT_SETTINGS, ...persisted.settings },
-          drafts: persisted.drafts ?? [],
+          // Drafts persisted before boardId existed adopt the active board.
+          drafts: migrateDraftBoardIds(persisted.drafts ?? [], activeBoardId),
           packets: persisted.packets ?? [],
           readIds: new Set(persisted.readIds ?? []),
         });
@@ -412,7 +415,10 @@ export const useStore = create<AppState>((set, get) => {
     uploadRep: async () => {
       const board = activeBoardOf();
       if (!board) return;
-      const drafts = get().drafts;
+      // Only the active board's drafts go into its .REP; other boards' drafts
+      // stay in the outbox until their board is active.
+      const drafts = draftsForBoard(get().drafts, board.id);
+      const remaining = () => get().drafts.filter((d) => d.boardId !== board.id);
       set({ uploading: true, error: null });
       if (get().settings.demoMode) {
         setTimeout(() => {
@@ -423,7 +429,7 @@ export const useStore = create<AppState>((set, get) => {
             dup: 0,
             skipped: 0,
           };
-          set({ uploading: false, report, drafts: [] });
+          set({ uploading: false, report, drafts: remaining() });
           persist();
         }, 1700);
         return;
@@ -442,7 +448,7 @@ export const useStore = create<AppState>((set, get) => {
           dup: result.duplicate,
           skipped: result.skipped,
         };
-        set({ uploading: false, report, drafts: [] });
+        set({ uploading: false, report, drafts: remaining() });
         persist();
       } catch (e) {
         // Upload is idempotent (server de-dupes) — safe to retry; keep drafts.
@@ -495,7 +501,7 @@ export function activeBoard(state: AppState): Board | undefined {
 export function messagesForArea(messages: Message[], areaId: string): Message[] {
   return messages.filter((m) => m.areaId === areaId);
 }
-export { draftsForMessage } from './draftSelectors';
+export { draftsForMessage, draftsForBoard } from './draftSelectors';
 export function privateMessages(messages: Message[]): Message[] {
   return messages.filter((m) => m.isPrivate);
 }
