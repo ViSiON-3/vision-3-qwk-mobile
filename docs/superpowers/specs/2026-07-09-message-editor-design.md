@@ -199,7 +199,8 @@ Three new **pure, independently unit-tested** modules under `src/qwk/`:
 - Strip: C0/C1 control chars (except `\n`, handled below), zero-width characters
   (U+200B ZERO WIDTH SPACE, U+200C/U+200D ZWNJ/ZWJ, U+2060 WORD JOINER), and the
   BOM (U+FEFF).
-- Normalize line endings to `\n` (defer the `\r`/`0xE3` encoding to `writeRep`).
+- Normalize line endings to `\n`. Encoding to the QWK body line terminator —
+  the single byte `0xE3` (π in CP437), not CR/LF — happens later in `writeRep`.
 - **Leave all other non-ASCII intact.** Characters the user genuinely intends
   (accented letters, CP437 box drawing, emoji) pass through untouched; `writeRep`
   then decides CP437 vs. the UTF-8 HEADERS.DAT path exactly as it does today.

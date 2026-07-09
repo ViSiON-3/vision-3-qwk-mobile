@@ -61,12 +61,14 @@ export function ComposeScreen({ navigation, route }: Props) {
   };
 
   // Classic BBS save prompt: Save (default) / Kill (destructive) / Edit (cancel).
+  // When an existing draft's body has been cleared, Save is withheld but the
+  // prompt stays reachable so the draft can still be killed from here.
   const onSave = () => {
-    if (!canSave) return;
-    Alert.alert('Save message?', undefined, [
+    if (!canSave && !editing) return;
+    Alert.alert(canSave ? 'Save message?' : 'Message is empty', undefined, [
       { text: 'Edit', style: 'cancel' },
       { text: 'Kill', style: 'destructive', onPress: kill },
-      { text: 'Save', onPress: commitSave },
+      ...(canSave ? [{ text: 'Save', onPress: commitSave }] : []),
     ]);
   };
 
@@ -123,7 +125,7 @@ export function ComposeScreen({ navigation, route }: Props) {
         style={styles.body}
       />
 
-      <Button title="⬇ SAVE" onPress={onSave} disabled={!canSave} style={styles.save} />
+      <Button title="⬇ SAVE" onPress={onSave} disabled={!canSave && !editing} style={styles.save} />
     </Screen>
   );
 }

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { formatTagline } from '../qwk/tagline';
+import { formatTagline, platformLabel } from '../qwk/tagline';
 import { APP_VERSION } from '../appMeta';
 
 /**
@@ -8,6 +8,5 @@ import { APP_VERSION } from '../appMeta';
  * free of react-native imports (and Node-testable).
  */
 export function currentTagline(): string {
-  const platform: 'iOS' | 'Android' = Platform.OS === 'android' ? 'Android' : 'iOS';
-  return formatTagline(APP_VERSION, platform);
+  return formatTagline(APP_VERSION, platformLabel(Platform.OS));
 }

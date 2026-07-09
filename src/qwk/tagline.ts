@@ -5,8 +5,19 @@
  */
 
 /** `--- ViSiON QWK Editor v<version> (<platform>)`. */
-export function formatTagline(version: string, platform: 'iOS' | 'Android'): string {
+export function formatTagline(version: string, platform: string): string {
   return `--- ViSiON QWK Editor v${version} (${platform})`;
+}
+
+/**
+ * Display label for a react-native `Platform.OS` value. Known targets get
+ * their proper casing; anything else is capitalized as-is so an unexpected
+ * platform never masquerades as iOS in uploaded tearlines.
+ */
+export function platformLabel(os: string): string {
+  if (os === 'ios') return 'iOS';
+  if (os === 'android') return 'Android';
+  return os.charAt(0).toUpperCase() + os.slice(1);
 }
 
 /**

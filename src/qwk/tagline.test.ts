@@ -1,9 +1,21 @@
-import { formatTagline, appendTagline } from './tagline';
+import { formatTagline, appendTagline, platformLabel } from './tagline';
 
 describe('formatTagline', () => {
   it('renders the verbatim tearline', () => {
     expect(formatTagline('0.1.0', 'iOS')).toBe('--- ViSiON QWK Editor v0.1.0 (iOS)');
     expect(formatTagline('1.2.3', 'Android')).toBe('--- ViSiON QWK Editor v1.2.3 (Android)');
+  });
+});
+
+describe('platformLabel', () => {
+  it('maps RN Platform.OS values to their display labels', () => {
+    expect(platformLabel('ios')).toBe('iOS');
+    expect(platformLabel('android')).toBe('Android');
+    expect(platformLabel('web')).toBe('Web');
+  });
+
+  it('capitalizes unknown platforms instead of mislabeling them as iOS', () => {
+    expect(platformLabel('macos')).toBe('Macos');
   });
 });
 
