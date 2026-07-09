@@ -14,6 +14,8 @@ import { AreasScreen } from '../screens/AreasScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { ReaderScreen } from '../screens/ReaderScreen';
 import { ComposeScreen } from '../screens/ComposeScreen';
+import { ComposeOptionsScreen } from '../screens/ComposeOptionsScreen';
+import { AreaPickerScreen } from '../screens/AreaPickerScreen';
 import { OutboxScreen } from '../screens/OutboxScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { BoardsScreen } from '../screens/BoardsScreen';
@@ -45,6 +47,8 @@ export function RootNavigator() {
           <Stack.Screen name="Messages" component={MessagesScreen} />
           <Stack.Screen name="Reader" component={ReaderScreen} />
           <Stack.Screen name="Compose" component={ComposeScreen} />
+          <Stack.Screen name="ComposeOptions" component={ComposeOptionsScreen} />
+          <Stack.Screen name="AreaPicker" component={AreaPickerScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Boards" component={BoardsScreen} />
           <Stack.Screen name="BoardForm" component={BoardFormScreen} />

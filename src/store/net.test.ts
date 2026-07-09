@@ -23,7 +23,7 @@ describe('net', () => {
       { status: 200, json: { posted: 2, skipped: 0, duplicate: 0, wrongBBS: false } },
     ]);
     const drafts: Draft[] = [
-      { id: 'd1', to: 'All', from: 'felonius', subject: 'hi', areaName: '', conferenceNumber: 1, priv: false, body: 'yo' },
+      { id: 'd1', boardId: 'b1', to: 'All', from: 'felonius', subject: 'hi', areaName: '', conferenceNumber: 1, priv: false, body: 'yo' },
     ];
     const result = await pushDrafts(makeSession(board, fetch), 'VISION3', drafts);
     expect(result.posted).toBe(2);

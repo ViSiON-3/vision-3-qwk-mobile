@@ -1,11 +1,12 @@
 import { unzipSync, strFromU8 } from 'fflate';
-import { buildRepFromDrafts } from './repBuilder';
+import { buildRepFromDrafts, finalizeReplyBody } from './repBuilder';
 import { parseMessagesDat } from '../qwk';
+import { buildQuote } from '../qwk/quote';
 import { Draft } from './types';
 
 const drafts: Draft[] = [
-  { id: 'd1', to: 'Prime', from: 'Zaphod', subject: 'Re: Welcome', areaName: '', conferenceNumber: 0, priv: true, body: 'thanks!' },
-  { id: 'd2', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General', conferenceNumber: 3, priv: false, body: 'add me' },
+  { id: 'd1', boardId: 'b1', to: 'Prime', from: 'Zaphod', subject: 'Re: Welcome', areaName: '', conferenceNumber: 0, priv: true, body: 'thanks!' },
+  { id: 'd2', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General', conferenceNumber: 3, priv: false, body: 'add me' },
 ];
 
 describe('buildRepFromDrafts', () => {
@@ -27,7 +28,7 @@ describe('buildRepFromDrafts', () => {
   it('carries reply threading — parent number (offset 108) + In-Reply-To Message-ID', () => {
     const threaded: Draft[] = [
       {
-        id: 'd1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General',
+        id: 'd1', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: nodelist', areaName: 'fsxNet General',
         conferenceNumber: 3, priv: false, body: 'add me', reference: 2048, inReplyTo: '<2048@fsx>',
       },
     ];
@@ -39,5 +40,45 @@ describe('buildRepFromDrafts', () => {
     const headers = strFromU8(files['HEADERS.DAT']);
     expect(headers).toContain('In-Reply-To');
     expect(headers).toContain('<2048@fsx>');
+  });
+});
+
+const TAG = '--- ViSiON QWK Editor v0.1.0 (iOS)';
+
+describe('finalizeReplyBody', () => {
+  it('sanitizes, wraps to 79, and appends the tag line', () => {
+    // Input has curly quotes (\uXXXX escapes keep the file pure ASCII);
+    // the plain-ASCII expected output proves sanitizeBody is in the pipeline.
+    const out = finalizeReplyBody('He said \u201Chi\u201D', TAG);
+    expect(out).toBe(`He said "hi"\n\n${TAG}`);
+  });
+
+  it('wraps long input to <=79 columns', () => {
+    const out = finalizeReplyBody('word '.repeat(30).trim(), TAG);
+    for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(79);
+  });
+
+  it('omits the tag line when none is supplied', () => {
+    expect(finalizeReplyBody('hi', '')).toBe('hi');
+  });
+
+  it('preserves the quote attribution line through a build-time re-wrap', () => {
+    const out = finalizeReplyBody(buildQuote('some text', 'avon'), TAG);
+    expect(out.split('\n')).toContain(' avon wrote:');
+  });
+});
+
+describe('buildRepFromDrafts with a tag line', () => {
+  it('stamps the tag line into the packed body exactly once', () => {
+    const d: Draft[] = [
+      { id: 'd1', boardId: 'b1', to: 'Avon', from: 'Zaphod', subject: 'Re: x', areaName: '', conferenceNumber: 3, priv: false, body: 'hello' },
+    ];
+    const once = buildRepFromDrafts('V3HQ', d, TAG);
+    const twice = buildRepFromDrafts('V3HQ', d, TAG);
+    expect(Array.from(once)).toEqual(Array.from(twice)); // idempotent
+    const files = unzipSync(once);
+    const msgs = parseMessagesDat(files['V3HQ.MSG']);
+    expect(msgs[0].body).toContain(TAG);
+    expect(msgs[0].body.split(TAG).length - 1).toBe(1); // stamped once
   });
 });

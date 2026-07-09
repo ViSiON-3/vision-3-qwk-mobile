@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button, Chip, Eyebrow, GearButton, ConsoleProgress } from '../components';
-import { useStore, activeBoard } from '../store/useStore';
+import { useStore, activeBoard, draftsForBoard } from '../store/useStore';
 import { ImportReport } from '../store/types';
 
 const UPLOAD_LINES = [
@@ -28,7 +28,6 @@ function ReportCell({ label, value, color }: { label: string; value: number; col
 }
 
 export function OutboxScreen() {
-  const drafts = useStore((s) => s.drafts);
   const uploading = useStore((s) => s.uploading);
   const report = useStore((s) => s.report);
   const uploadRep = useStore((s) => s.uploadRep);
@@ -36,6 +35,8 @@ export function OutboxScreen() {
   const removeDraft = useStore((s) => s.removeDraft);
   const error = useStore((s) => s.error);
   const board = useStore(activeBoard);
+  // Upload compiles only the active board's drafts, so show only those here.
+  const drafts = draftsForBoard(useStore((s) => s.drafts), board?.id ?? '');
 
   return (
     <Screen title="OUTBOX" right={<GearButton />} scroll>

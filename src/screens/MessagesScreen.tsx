@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Screen, Card, Eyebrow, MessageListRow } from '../components';
+import { Screen, Card, Eyebrow, MessageListRow, Button } from '../components';
+import { radius } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore, messagesForArea, unreadInArea } from '../store/useStore';
 
@@ -24,7 +25,19 @@ export function MessagesScreen({ route, navigation }: Props) {
   };
 
   return (
-    <Screen title={area?.name ?? 'MESSAGES'} onBack={() => navigation.goBack()} scroll>
+    <Screen
+      title={area?.name ?? 'MESSAGES'}
+      onBack={() => navigation.goBack()}
+      right={
+        <Button
+          title="＋ NEW"
+          variant="primary"
+          style={styles.headerNew}
+          onPress={() => navigation.navigate('AreaPicker')}
+        />
+      }
+      scroll
+    >
       <Eyebrow>{`${list.length} MESSAGES · ${unread} UNREAD`}</Eyebrow>
       <Card style={styles.card}>
         {list.map((m, i) => (
@@ -45,4 +58,5 @@ export function MessagesScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   card: { padding: 0, overflow: 'hidden' },
+  headerNew: { height: 34, paddingHorizontal: 14, borderRadius: radius.chip },
 });

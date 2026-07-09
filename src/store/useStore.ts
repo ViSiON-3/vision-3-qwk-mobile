@@ -5,7 +5,9 @@ import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } fro
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
+import { currentTagline } from './appTagline';
 import { makeSession, pushDrafts, describeSyncError } from './net';
+import { draftsForBoard, migrateDraftBoardIds } from './draftSelectors';
 import { QwkSession, DownloadToFileResult } from '../api';
 import { readQwkPacket } from '../qwk';
 import {
@@ -92,6 +94,7 @@ export interface AppState {
 
   // outbox
   addDraft: (draft: Omit<Draft, 'id'>) => void;
+  updateDraft: (id: string, patch: Partial<Omit<Draft, 'id'>>) => void;
   removeDraft: (id: string) => void;
   uploadRep: () => void;
   clearReport: () => void;
@@ -210,11 +213,13 @@ export const useStore = create<AppState>((set, get) => {
         const boards: Board[] = await Promise.all(
           base.map(async (b) => ({ ...b, pass: await getBoardPassword(b.id) }))
         );
+        const activeBoardId = persisted.activeBoardId || mockBoards[0].id;
         set({
           boards,
-          activeBoardId: persisted.activeBoardId || mockBoards[0].id,
+          activeBoardId,
           settings: { ...DEFAULT_SETTINGS, ...persisted.settings },
-          drafts: persisted.drafts ?? [],
+          // Drafts persisted before boardId existed adopt the active board.
+          drafts: migrateDraftBoardIds(persisted.drafts ?? [], activeBoardId),
           packets: persisted.packets ?? [],
           readIds: new Set(persisted.readIds ?? []),
         });
@@ -398,6 +403,10 @@ export const useStore = create<AppState>((set, get) => {
       set((s) => ({ drafts: [...s.drafts, { ...draft, id: nextId('d') }] }));
       persist();
     },
+    updateDraft: (id, patch) => {
+      set((s) => ({ drafts: s.drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)) }));
+      persist();
+    },
     removeDraft: (id) => {
       set((s) => ({ drafts: s.drafts.filter((d) => d.id !== id) }));
       persist();
@@ -406,25 +415,28 @@ export const useStore = create<AppState>((set, get) => {
     uploadRep: async () => {
       const board = activeBoardOf();
       if (!board) return;
-      const drafts = get().drafts;
+      // Only the active board's drafts go into its .REP; other boards' drafts
+      // stay in the outbox until their board is active.
+      const drafts = draftsForBoard(get().drafts, board.id);
+      const remaining = () => get().drafts.filter((d) => d.boardId !== board.id);
       set({ uploading: true, error: null });
       if (get().settings.demoMode) {
         setTimeout(() => {
-          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts); // exercise the writer
+          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts, currentTagline()); // exercise the writer
           const report: ImportReport = {
             posted: drafts.length,
             linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
             dup: 0,
             skipped: 0,
           };
-          set({ uploading: false, report, drafts: [] });
+          set({ uploading: false, report, drafts: remaining() });
           persist();
         }, 1700);
         return;
       }
       try {
         if (!activeSession) activeSession = makeSession(board);
-        const result = await pushDrafts(activeSession, board.bbsId, drafts);
+        const result = await pushDrafts(activeSession, board.bbsId, drafts, currentTagline());
         if (result.wrongBBS) {
           // Nothing posted — keep the outbox so the user can fix the board id.
           set({ uploading: false, error: `Server rejected packet: wrong BBS id (${board.bbsId}).` });
@@ -436,7 +448,7 @@ export const useStore = create<AppState>((set, get) => {
           dup: result.duplicate,
           skipped: result.skipped,
         };
-        set({ uploading: false, report, drafts: [] });
+        set({ uploading: false, report, drafts: remaining() });
         persist();
       } catch (e) {
         // Upload is idempotent (server de-dupes) — safe to retry; keep drafts.
@@ -489,6 +501,7 @@ export function activeBoard(state: AppState): Board | undefined {
 export function messagesForArea(messages: Message[], areaId: string): Message[] {
   return messages.filter((m) => m.areaId === areaId);
 }
+export { draftsForMessage, draftsForBoard } from './draftSelectors';
 export function privateMessages(messages: Message[]): Message[] {
   return messages.filter((m) => m.isPrivate);
 }

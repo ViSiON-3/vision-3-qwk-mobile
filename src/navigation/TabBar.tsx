@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, letterSpacing } from '../theme/tokens';
 import { Mono } from '../components/text';
-import { useStore, privateUnread } from '../store/useStore';
+import { useStore, privateUnread, draftsForBoard } from '../store/useStore';
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Sync: 'sync-outline',
@@ -19,7 +19,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
-  const drafts = useStore((s) => s.drafts);
+  const activeBoardId = useStore((s) => s.activeBoardId);
+  const drafts = draftsForBoard(useStore((s) => s.drafts), activeBoardId);
   const mailBadge = privateUnread(messages, readIds);
 
   return (
