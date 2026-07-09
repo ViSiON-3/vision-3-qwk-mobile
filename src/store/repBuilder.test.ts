@@ -46,7 +46,9 @@ const TAG = '--- ViSiON QWK Editor v0.1.0 (iOS)';
 
 describe('finalizeReplyBody', () => {
   it('sanitizes, wraps to 79, and appends the tag line', () => {
-    const out = finalizeReplyBody('He said "hi"', TAG);
+    // Input has curly quotes (\uXXXX escapes keep the file pure ASCII);
+    // the plain-ASCII expected output proves sanitizeBody is in the pipeline.
+    const out = finalizeReplyBody('He said \u201Chi\u201D', TAG);
     expect(out).toBe(`He said "hi"\n\n${TAG}`);
   });
 
