@@ -5,6 +5,7 @@ import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } fro
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
+import { currentTagline } from './appTagline';
 import { makeSession, pushDrafts, describeSyncError } from './net';
 import { QwkSession, DownloadToFileResult } from '../api';
 import { readQwkPacket } from '../qwk';
@@ -92,6 +93,7 @@ export interface AppState {
 
   // outbox
   addDraft: (draft: Omit<Draft, 'id'>) => void;
+  updateDraft: (id: string, patch: Partial<Omit<Draft, 'id'>>) => void;
   removeDraft: (id: string) => void;
   uploadRep: () => void;
   clearReport: () => void;
@@ -398,6 +400,10 @@ export const useStore = create<AppState>((set, get) => {
       set((s) => ({ drafts: [...s.drafts, { ...draft, id: nextId('d') }] }));
       persist();
     },
+    updateDraft: (id, patch) => {
+      set((s) => ({ drafts: s.drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)) }));
+      persist();
+    },
     removeDraft: (id) => {
       set((s) => ({ drafts: s.drafts.filter((d) => d.id !== id) }));
       persist();
@@ -410,7 +416,7 @@ export const useStore = create<AppState>((set, get) => {
       set({ uploading: true, error: null });
       if (get().settings.demoMode) {
         setTimeout(() => {
-          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts); // exercise the writer
+          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts, currentTagline()); // exercise the writer
           const report: ImportReport = {
             posted: drafts.length,
             linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
@@ -424,7 +430,7 @@ export const useStore = create<AppState>((set, get) => {
       }
       try {
         if (!activeSession) activeSession = makeSession(board);
-        const result = await pushDrafts(activeSession, board.bbsId, drafts);
+        const result = await pushDrafts(activeSession, board.bbsId, drafts, currentTagline());
         if (result.wrongBBS) {
           // Nothing posted — keep the outbox so the user can fix the board id.
           set({ uploading: false, error: `Server rejected packet: wrong BBS id (${board.bbsId}).` });
@@ -489,6 +495,7 @@ export function activeBoard(state: AppState): Board | undefined {
 export function messagesForArea(messages: Message[], areaId: string): Message[] {
   return messages.filter((m) => m.areaId === areaId);
 }
+export { draftsForMessage } from './draftSelectors';
 export function privateMessages(messages: Message[]): Message[] {
   return messages.filter((m) => m.isPrivate);
 }
