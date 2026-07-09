@@ -37,8 +37,9 @@ export function ReaderScreen({ navigation, route }: Props) {
   const area = areas.find((a) => a.id === areaId);
 
   const drafts = useStore((s) => s.drafts);
-  const savedReplies = msg
-    ? draftsForMessage(drafts, msg.number, area?.qwkConference ?? PRIVATE_CONFERENCE)
+  const confForSavedReplies = msg ? area?.qwkConference ?? (msg.isPrivate ? PRIVATE_CONFERENCE : undefined) : undefined;
+  const savedReplies = msg && confForSavedReplies !== undefined
+    ? draftsForMessage(drafts, msg.number, confForSavedReplies)
     : [];
 
   useEffect(() => {
