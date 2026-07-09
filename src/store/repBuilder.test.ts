@@ -1,6 +1,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { buildRepFromDrafts, finalizeReplyBody } from './repBuilder';
 import { parseMessagesDat } from '../qwk';
+import { buildQuote } from '../qwk/quote';
 import { Draft } from './types';
 
 const drafts: Draft[] = [
@@ -59,6 +60,11 @@ describe('finalizeReplyBody', () => {
 
   it('omits the tag line when none is supplied', () => {
     expect(finalizeReplyBody('hi', '')).toBe('hi');
+  });
+
+  it('preserves the quote attribution line through a build-time re-wrap', () => {
+    const out = finalizeReplyBody(buildQuote('some text', 'avon'), TAG);
+    expect(out.split('\n')).toContain(' avon wrote:');
   });
 });
 

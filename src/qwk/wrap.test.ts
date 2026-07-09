@@ -30,4 +30,20 @@ describe('wrapText', () => {
     // width 8, prefix "> " (2) -> 6 usable. "aaaa" fits, "+bbbb" would be 9 -> wrap.
     expect(wrapText('aaaa bbbb', 8, '> ')).toBe('> aaaa\n> bbbb');
   });
+
+  it('preserves leading whitespace on an indented line', () => {
+    expect(wrapText('  indented line', 79)).toBe('  indented line');
+  });
+
+  it('preserves indentation on the first line only when re-wrapping a long indented line', () => {
+    const words = Array(20).fill('word').join(' '); // 99 chars of content
+    const out = wrapText('  ' + words, 79).split('\n');
+    expect(out[0].startsWith('  word')).toBe(true);
+    for (const line of out.slice(1)) expect(line.startsWith('  ')).toBe(false);
+    for (const line of out) expect(line.length).toBeLessThanOrEqual(79);
+  });
+
+  it('preserves the quote attribution line\'s leading space unchanged', () => {
+    expect(wrapText(' avon wrote:', 79)).toBe(' avon wrote:');
+  });
 });
