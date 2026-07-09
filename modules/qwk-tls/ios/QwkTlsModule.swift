@@ -307,7 +307,10 @@ private final class QwkTlsDownload: NSObject, URLSessionDownloadDelegate {
     totalBytesWritten: Int64,
     totalBytesExpectedToWrite: Int64
   ) {
-    onProgress(totalBytesWritten, totalBytesExpectedToWrite)
+    // A missing Content-Length yields NSURLSessionTransferSizeUnknown (-1);
+    // normalize to 0 so consumers never see a negative expected size.
+    let expected = max(0, totalBytesExpectedToWrite)
+    onProgress(totalBytesWritten, expected)
   }
 
   func urlSession(
