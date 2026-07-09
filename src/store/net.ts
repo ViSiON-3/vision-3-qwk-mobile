@@ -31,8 +31,13 @@ export function makeSession(board: Board, fetchImpl?: FetchLike): QwkSession {
 }
 
 /** Compile the outbox to a .REP and upload it; the server de-dupes retries. */
-export function pushDrafts(session: QwkSession, bbsId: string, drafts: Draft[]): Promise<UploadResult> {
-  return session.upload(buildRepFromDrafts(bbsId, drafts));
+export function pushDrafts(
+  session: QwkSession,
+  bbsId: string,
+  drafts: Draft[],
+  tagline = ''
+): Promise<UploadResult> {
+  return session.upload(buildRepFromDrafts(bbsId, drafts, tagline));
 }
 
 /** Map a thrown API/network error to a short, user-facing message. */

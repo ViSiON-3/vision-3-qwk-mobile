@@ -5,6 +5,7 @@ import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } fro
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
+import { currentTagline } from './appTagline';
 import { makeSession, pushDrafts, describeSyncError } from './net';
 import { QwkSession } from '../api';
 import { readQwkPacket } from '../qwk';
@@ -372,7 +373,7 @@ export const useStore = create<AppState>((set, get) => {
       set({ uploading: true, error: null });
       if (get().settings.demoMode) {
         setTimeout(() => {
-          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts); // exercise the writer
+          if (drafts.length) buildRepFromDrafts(board.bbsId, drafts, currentTagline()); // exercise the writer
           const report: ImportReport = {
             posted: drafts.length,
             linked: drafts.filter((d) => d.subject.toLowerCase().startsWith('re:')).length,
@@ -386,7 +387,7 @@ export const useStore = create<AppState>((set, get) => {
       }
       try {
         if (!activeSession) activeSession = makeSession(board);
-        const result = await pushDrafts(activeSession, board.bbsId, drafts);
+        const result = await pushDrafts(activeSession, board.bbsId, drafts, currentTagline());
         if (result.wrongBBS) {
           // Nothing posted — keep the outbox so the user can fix the board id.
           set({ uploading: false, error: `Server rejected packet: wrong BBS id (${board.bbsId}).` });
