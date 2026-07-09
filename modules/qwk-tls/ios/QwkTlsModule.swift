@@ -329,8 +329,9 @@ private final class QwkTlsDownload: NSObject, URLSessionDownloadDelegate {
         try FileManager.default.createDirectory(
           at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.moveItem(at: location, to: dest)
-        let size = (try? FileManager.default.attributesOfItem(atPath: destPath)[.size] as? Int) ?? 0
-        settle(["status": 200, "headers": headers, "bytesWritten": size ?? 0])
+        let attrs = try? FileManager.default.attributesOfItem(atPath: destPath)
+        let size = (attrs?[.size] as? Int) ?? 0
+        settle(["status": 200, "headers": headers, "bytesWritten": size])
       } catch {
         fail("move failed: \(error.localizedDescription)")
       }

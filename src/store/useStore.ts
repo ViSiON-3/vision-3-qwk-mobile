@@ -52,7 +52,11 @@ export interface AppState {
   error: string | null;
 
   syncing: boolean;
-  /** Download progress 0..1 while streaming a packet; null when not downloading. */
+  /**
+   * Download progress 0..1 while streaming a packet with a known size. null when
+   * not downloading, on the non-streaming fallback, or when the total size is
+   * unknown (indeterminate) — SyncScreen then shows its reveal-cadence animation.
+   */
   downloadProgress: number | null;
   lastPacket: Packet | null;
 
@@ -264,15 +268,18 @@ export const useStore = create<AppState>((set, get) => {
       try {
         if (!activeSession) activeSession = makeSession(board);
         const id = nextId('pkt');
-        set({ downloadProgress: 0 });
-        const onProgress = (written: number, total: number) =>
-          set({ downloadProgress: total > 0 ? Math.min(1, written / total) : null });
 
         // Stream the packet straight to its cache file when the transport supports
         // it (pinned/native) — the body never buffers in memory or crosses the RN
         // bridge as base64. Non-pinned boards fall back to an in-memory download.
         let result: DownloadToFileResult;
         if (activeSession.canStreamToFile) {
+          // Only the streaming path emits byte-level progress; wire the bar here so
+          // the fallback below keeps SyncScreen's indeterminate reveal animation
+          // (progress stays null) rather than freezing it at 0%.
+          set({ downloadProgress: 0 });
+          const onProgress = (written: number, total: number) =>
+            set({ downloadProgress: total > 0 ? Math.min(1, written / total) : null });
           result = await activeSession.downloadToFile(packetFilePath(id), onProgress);
         } else {
           const d = await activeSession.download();
