@@ -8,6 +8,7 @@
 import {
   createQwkClient,
   createPinnedFetch,
+  createPinnedDownloadToFile,
   PinningUnavailableError,
   QwkSession,
   QwkApiError,
@@ -26,7 +27,10 @@ import { buildRepFromDrafts } from './repBuilder';
  */
 export function makeSession(board: Board, fetchImpl?: FetchLike): QwkSession {
   const fetch = fetchImpl ?? (board.fingerprint ? createPinnedFetch(board.fingerprint) : undefined);
-  const client = createQwkClient({ host: board.host, port: board.port, fetch });
+  // A pinned board also gets the native streaming transport, so large packets
+  // download straight to disk (no in-memory base64 blob) with real progress.
+  const downloadToFile = board.fingerprint ? createPinnedDownloadToFile(board.fingerprint) : undefined;
+  const client = createQwkClient({ host: board.host, port: board.port, fetch, downloadToFile });
   return new QwkSession(client, { handle: board.handle, password: board.pass });
 }
 

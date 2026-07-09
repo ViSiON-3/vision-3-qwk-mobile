@@ -28,6 +28,13 @@ export function writePacketBytes(id: string, bytes: Uint8Array): void {
   file.write(bytes);
 }
 
+/** Absolute filesystem path of a packet's cache file, for a native streamed
+ * write (no `file://` scheme — native uses `URL(fileURLWithPath:)`). The
+ * directory is ensured to exist. */
+export function packetFilePath(id: string): string {
+  return packetFile(id).uri.replace(/^file:\/\//, '');
+}
+
 /** Read packet bytes, or null if the file is missing/unreadable (a corrupt or
  * permission-denied file shouldn't crash a reparse — treat it as absent). */
 export async function readPacketBytes(id: string): Promise<Uint8Array | null> {

@@ -26,6 +26,7 @@ export function SyncScreen({ navigation }: Props) {
   const messages = useStore((s) => s.messages);
   const drafts = useStore((s) => s.drafts);
   const syncing = useStore((s) => s.syncing);
+  const downloadProgress = useStore((s) => s.downloadProgress);
   const lastPacket = useStore((s) => s.lastPacket);
   const syncNow = useStore((s) => s.syncNow);
   const error = useStore((s) => s.error);
@@ -94,7 +95,7 @@ export function SyncScreen({ navigation }: Props) {
       </View>
 
       {syncing ? (
-        <ConsoleProgress lines={SYNC_LINES} showBar accent={colors.green} />
+        <ConsoleProgress lines={SYNC_LINES} showBar accent={colors.green} progress={downloadProgress} />
       ) : (
         <>
           {lastPacket && (

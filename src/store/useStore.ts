@@ -6,13 +6,14 @@ import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
 import { makeSession, pushDrafts, describeSyncError } from './net';
-import { QwkSession } from '../api';
+import { QwkSession, DownloadToFileResult } from '../api';
 import { readQwkPacket } from '../qwk';
 import {
   writePacketBytes,
   readPacketBytes,
   deletePacketBytes,
   clearAllPacketBytes,
+  packetFilePath,
 } from '../storage/packetCache';
 import { loadPersistedState, savePersistedState, PersistedState } from '../storage/persistence';
 import { getBoardPassword, setBoardPassword, deleteBoardPassword } from '../storage/secrets';
@@ -51,6 +52,12 @@ export interface AppState {
   error: string | null;
 
   syncing: boolean;
+  /**
+   * Download progress 0..1 while streaming a packet with a known size. null when
+   * not downloading, on the non-streaming fallback, or when the total size is
+   * unknown (indeterminate) — SyncScreen then shows its reveal-cadence animation.
+   */
+  downloadProgress: number | null;
   lastPacket: Packet | null;
 
   /** Messages parsed from the active board's cached packets. */
@@ -180,6 +187,7 @@ export const useStore = create<AppState>((set, get) => {
     error: null,
 
     syncing: false,
+    downloadProgress: null,
     lastPacket: null,
 
     messages: [],
@@ -259,15 +267,45 @@ export const useStore = create<AppState>((set, get) => {
       }
       try {
         if (!activeSession) activeSession = makeSession(board);
-        const res = await activeSession.download();
-        if (res.kind === 'none') {
+        const id = nextId('pkt');
+
+        // Stream the packet straight to its cache file when the transport supports
+        // it (pinned/native) — the body never buffers in memory or crosses the RN
+        // bridge as base64. Non-pinned boards fall back to an in-memory download.
+        let result: DownloadToFileResult;
+        if (activeSession.canStreamToFile) {
+          // Only the streaming path emits byte-level progress; wire the bar here so
+          // the fallback below keeps SyncScreen's indeterminate reveal animation
+          // (progress stays null) rather than freezing it at 0%.
+          set({ downloadProgress: 0 });
+          const onProgress = (written: number, total: number) =>
+            set({ downloadProgress: total > 0 ? Math.min(1, written / total) : null });
+          result = await activeSession.downloadToFile(packetFilePath(id), onProgress);
+        } else {
+          const d = await activeSession.download();
+          if (d.kind === 'packet') {
+            writePacketBytes(id, d.bytes);
+            result = { kind: 'packet', messageCount: d.messageCount };
+          } else {
+            result = { kind: 'none' };
+          }
+        }
+        set({ downloadProgress: null });
+        if (result.kind === 'none') {
           set({ syncing: false }); // no new mail; nothing to commit
           return;
         }
-        // Commit only once bytes are fully received (server already advanced newscan).
-        const id = nextId('pkt');
-        writePacketBytes(id, res.bytes);
-        const parsed = readQwkPacket(res.bytes);
+
+        // Bytes are committed to disk (server already advanced newscan). Read them
+        // back to parse for meta + taxonomy — parsing is in-memory, but streaming
+        // spared the *transfer* from buffering the whole packet as a base64 blob.
+        const bytes = await readPacketBytes(id);
+        if (!bytes) {
+          deletePacketBytes(id);
+          set({ syncing: false, error: 'Downloaded packet could not be read.' });
+          return;
+        }
+        const parsed = readQwkPacket(bytes);
         // Adopt the server's real BBSID from CONTROL.DAT. The board's id is
         // initially derived from its name, which may not match the server —
         // and a mismatch gets REP uploads rejected (wrongBBS). Everything keyed
@@ -281,7 +319,7 @@ export const useStore = create<AppState>((set, get) => {
           msgs: parsed.messages.length,
           confs: tax.conferences.length,
           areas: tax.areas.length,
-          kb: Math.max(1, Math.round(res.bytes.length / 1024)),
+          kb: Math.max(1, Math.round(bytes.length / 1024)),
           date: stamp(),
         };
         const adopted = bbsId !== board.bbsId;
@@ -302,7 +340,7 @@ export const useStore = create<AppState>((set, get) => {
         set({ syncing: false });
         persist();
       } catch (e) {
-        set({ syncing: false, error: describeSyncError(e) });
+        set({ syncing: false, downloadProgress: null, error: describeSyncError(e) });
       }
     },
 

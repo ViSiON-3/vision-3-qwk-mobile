@@ -24,10 +24,41 @@ export interface NativeResponse {
   bodyBase64: string;
 }
 
+export interface NativeDownloadOptions {
+  url: string;
+  method?: string;
+  headers: Record<string, string>;
+  pinnedSha256: string;
+}
+
+export interface NativeDownloadResult {
+  status: number;
+  headers: Record<string, string>;
+  /** Present on 200: bytes written to destPath (body is on disk, not returned). */
+  bytesWritten?: number;
+  /** Present for non-200 (204/errors): the small body, base64. */
+  bodyBase64?: string;
+}
+
+export interface NativeEventSubscription {
+  remove(): void;
+}
+
 export interface NativeQwkTls {
   request(options: NativeRequest): Promise<NativeResponse>;
   /** Trust-on-first-use: return the server's leaf cert SHA-256 (64 upper-hex). */
   getFingerprint(host: string, port: number): Promise<string>;
+  /** Stream a pinned GET to destPath; body never enters memory. `requestId`
+   * correlates the onDownloadProgress events. */
+  downloadToFile(
+    options: NativeDownloadOptions,
+    destPath: string,
+    requestId: string
+  ): Promise<NativeDownloadResult>;
+  addListener(
+    event: 'onDownloadProgress',
+    listener: (payload: { id: string; written: number; total: number }) => void
+  ): NativeEventSubscription;
 }
 
 let cached: NativeQwkTls | null | undefined;
