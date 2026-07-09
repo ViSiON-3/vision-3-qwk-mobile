@@ -12,10 +12,20 @@ interface ConsoleProgressProps {
   accent?: string;
   intervalMs?: number;
   onDone?: () => void;
+  /** Real progress 0..1 to drive the bar (e.g. bytes downloaded). When null/
+   * undefined the bar falls back to the line-reveal cadence. */
+  progress?: number | null;
 }
 
 /** Terminal-style progress block (connect handshake, sync, upload). */
-export function ConsoleProgress({ lines, showBar, accent = colors.green, intervalMs = 240, onDone }: ConsoleProgressProps) {
+export function ConsoleProgress({
+  lines,
+  showBar,
+  accent = colors.green,
+  intervalMs = 240,
+  onDone,
+  progress,
+}: ConsoleProgressProps) {
   const [revealed, setRevealed] = useState(1);
   const blink = useRef(new Animated.Value(1)).current;
   // Keep onDone in a ref so an inline callback's changing identity can't reset
@@ -43,7 +53,9 @@ export function ConsoleProgress({ lines, showBar, accent = colors.green, interva
     return () => clearTimeout(t);
   }, [revealed, lines.length, intervalMs]);
 
-  const pct = lines.length > 0 ? Math.min(100, Math.round((revealed / lines.length) * 100)) : 0;
+  const revealPct = lines.length > 0 ? Math.min(100, Math.round((revealed / lines.length) * 100)) : 0;
+  // Real byte progress drives the bar when provided; otherwise the reveal cadence.
+  const pct = progress != null ? Math.round(Math.min(1, Math.max(0, progress)) * 100) : revealPct;
   const filled = Math.round((pct / 100) * 16);
   const bar = '█'.repeat(filled) + '░'.repeat(16 - filled);
 

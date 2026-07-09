@@ -4,6 +4,22 @@ export type { QwkClient } from './qwkApi';
 export { QwkSession } from './session';
 export type { Credentials } from './session';
 export { QwkApiError, QwkAuthError, QwkRateLimitError } from './errors';
-export { createPinnedFetch, probeServerFingerprint, PinningUnavailableError } from './pinnedFetch';
+export {
+  createPinnedFetch,
+  createPinnedDownloadToFile,
+  probeServerFingerprint,
+  PinningUnavailableError,
+} from './pinnedFetch';
 export { normalizeFingerprint, isValidFingerprint, formatFingerprint, fingerprintsEqual } from './fingerprint';
-export type { LoginResult, DownloadResult, UploadResult, QwkClientConfig, FetchLike, FetchResponseLike } from './types';
+export type {
+  LoginResult,
+  DownloadResult,
+  DownloadToFileResult,
+  DownloadProgress,
+  UploadResult,
+  QwkClientConfig,
+  FetchLike,
+  FetchResponseLike,
+  DownloadToFileLike,
+  StreamResponseLike,
+} from './types';

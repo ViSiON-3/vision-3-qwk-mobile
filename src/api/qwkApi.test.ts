@@ -62,6 +62,73 @@ describe('createQwkClient', () => {
     });
   });
 
+  describe('downloadPacketToFile (streaming)', () => {
+    const streamConfig = (downloadToFile: NonNullable<Parameters<typeof createQwkClient>[0]['downloadToFile']>) => ({
+      host: 'bbs.test',
+      port: 8666,
+      downloadToFile,
+    });
+
+    function fakeStream(status: number, headers: Record<string, string> = {}, body?: unknown) {
+      const calls: Array<{ url: string; init: { headers?: Record<string, string> }; destPath: string }> = [];
+      const downloadToFile = async (
+        url: string,
+        init: { headers?: Record<string, string> },
+        destPath: string,
+        onProgress?: (w: number, t: number) => void
+      ) => {
+        calls.push({ url, init, destPath });
+        onProgress?.(10, 10);
+        const bytes = body !== undefined ? new TextEncoder().encode(JSON.stringify(body)) : new Uint8Array();
+        return {
+          status,
+          headers: { get: (n: string) => headers[n] ?? null },
+          json: async () => JSON.parse(new TextDecoder().decode(bytes)),
+          text: async () => new TextDecoder().decode(bytes),
+        };
+      };
+      return { downloadToFile, calls };
+    }
+
+    it('reports canDownloadToFile only when a transport is configured', () => {
+      expect(createQwkClient(config(scriptedFetch([]).fetch)).canDownloadToFile).toBe(false);
+      expect(createQwkClient(streamConfig(fakeStream(204).downloadToFile)).canDownloadToFile).toBe(true);
+    });
+
+    it('streams a packet to destPath and returns the message count + bearer', async () => {
+      const { downloadToFile, calls } = fakeStream(200, { 'X-QWK-Messages': '9' });
+      const r = await createQwkClient(streamConfig(downloadToFile)).downloadPacketToFile('tok', '/tmp/p.qwk');
+      expect(r).toEqual({ kind: 'packet', messageCount: 9 });
+      expect(calls[0].destPath).toBe('/tmp/p.qwk');
+      expect(calls[0].url).toBe('https://bbs.test:8666/api/qwk/packet');
+      expect(calls[0].init.headers?.['Authorization']).toBe('Bearer tok');
+    });
+
+    it('treats 204 as nothing new', async () => {
+      const { downloadToFile } = fakeStream(204);
+      expect(await createQwkClient(streamConfig(downloadToFile)).downloadPacketToFile('tok', '/tmp/p.qwk')).toEqual({
+        kind: 'none',
+      });
+    });
+
+    it('throws QwkAuthError on 401 and maps a 400 error body', async () => {
+      await expect(
+        createQwkClient(streamConfig(fakeStream(401).downloadToFile)).downloadPacketToFile('tok', '/tmp/p.qwk')
+      ).rejects.toBeInstanceOf(QwkAuthError);
+      await expect(
+        createQwkClient(
+          streamConfig(fakeStream(400, {}, { error: 'bad_packet', message: 'nope' }).downloadToFile)
+        ).downloadPacketToFile('tok', '/tmp/p.qwk')
+      ).rejects.toMatchObject({ code: 'bad_packet' });
+    });
+
+    it('throws when no streaming transport is configured', async () => {
+      await expect(
+        createQwkClient(config(scriptedFetch([]).fetch)).downloadPacketToFile('tok', '/tmp/p.qwk')
+      ).rejects.toMatchObject({ code: 'no_stream' });
+    });
+  });
+
   describe('uploadReply', () => {
     it('posts application/zip and returns the import result', async () => {
       const { fetch, calls } = scriptedFetch([{ status: 200, json: { posted: 2, skipped: 0, duplicate: 0, wrongBBS: false } }]);

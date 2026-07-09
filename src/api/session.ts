@@ -6,7 +6,7 @@
  */
 import { QwkAuthError } from './errors';
 import { QwkClient } from './qwkApi';
-import { DownloadResult, UploadResult } from './types';
+import { DownloadProgress, DownloadResult, DownloadToFileResult, UploadResult } from './types';
 
 export interface Credentials {
   handle: string;
@@ -44,8 +44,18 @@ export class QwkSession {
     }
   }
 
+  /** True when the packet can be streamed to disk (pinned/native transport). */
+  get canStreamToFile(): boolean {
+    return this.client.canDownloadToFile;
+  }
+
   download(): Promise<DownloadResult> {
     return this.withAuth((t) => this.client.downloadPacket(t));
+  }
+
+  /** Stream the packet straight to `destPath` (no in-memory body). */
+  downloadToFile(destPath: string, onProgress?: DownloadProgress): Promise<DownloadToFileResult> {
+    return this.withAuth((t) => this.client.downloadPacketToFile(t, destPath, onProgress));
   }
 
   /** Upload a .REP. Retrying the same bytes is safe — the server de-dupes. */

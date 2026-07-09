@@ -22,6 +22,17 @@ public class QwkTlsModule: Module {
     AsyncFunction("getFingerprint") { (host: String, port: Int, promise: Promise) in
       QwkTlsProbe.perform(host: host, port: port, promise: promise)
     }
+
+    // Real byte progress for streaming downloads (id correlates to the call).
+    Events("onDownloadProgress")
+
+    // Stream a pinned GET straight to a file on disk (no in-memory body / base64
+    // bridge blob), so large packets don't blow up memory. Emits onDownloadProgress.
+    AsyncFunction("downloadToFile") { (options: [String: Any], destPath: String, requestId: String, promise: Promise) in
+      QwkTlsDownload.perform(options: options, destPath: destPath, promise: promise) { [weak self] written, total in
+        self?.sendEvent("onDownloadProgress", ["id": requestId, "written": written, "total": total])
+      }
+    }
   }
 }
 
@@ -38,6 +49,19 @@ func leafSha256Hex(_ trust: SecTrust) -> String? {
   guard let certificate = leaf else { return nil }
   let der = SecCertificateCopyData(certificate) as Data
   return SHA256.hash(data: der).map { String(format: "%02X", $0) }.joined()
+}
+
+/** Server-trust disposition for a pinned connection: use the credential iff the
+ * leaf cert's SHA-256 equals the (64-hex) pin; otherwise fail closed by
+ * cancelling. Shared by the pinned request and the streaming download. */
+func pinnedChallengeDisposition(
+  _ trust: SecTrust,
+  _ pinnedSha256: String
+) -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+  guard pinnedSha256.count == 64, let hex = leafSha256Hex(trust), hex == pinnedSha256 else {
+    return (.cancelAuthenticationChallenge, nil)
+  }
+  return (.useCredential, URLCredential(trust: trust))
 }
 
 private final class QwkTlsRequest: NSObject, URLSessionDelegate {
@@ -117,20 +141,9 @@ private final class QwkTlsRequest: NSObject, URLSessionDelegate {
       completionHandler(.performDefaultHandling, nil)
       return
     }
-
-    // Fail closed on a malformed pin (empty / not a 64-hex SHA-256) or an
-    // unreadable cert — defense-in-depth alongside the JS validation.
-    // leafSha256Hex handles the leaf-cert extraction (shared with the probe).
-    guard pinnedSha256.count == 64, let hex = leafSha256Hex(trust) else {
-      completionHandler(.cancelAuthenticationChallenge, nil)
-      return
-    }
-
-    if hex == pinnedSha256 {
-      completionHandler(.useCredential, URLCredential(trust: trust))
-    } else {
-      completionHandler(.cancelAuthenticationChallenge, nil)
-    }
+    // Pin the leaf cert (fails closed on a bad/short pin or unreadable cert).
+    let (disposition, credential) = pinnedChallengeDisposition(trust, pinnedSha256)
+    completionHandler(disposition, credential)
   }
 }
 
@@ -209,5 +222,145 @@ private final class QwkTlsProbe: NSObject, URLSessionDelegate {
     // The connection itself is never trusted.
     settle(hex)
     completionHandler(.cancelAuthenticationChallenge, nil)
+  }
+}
+
+/**
+ * QwkTlsDownload — a pinned GET streamed directly to a file via a
+ * URLSessionDownloadTask, so the body never lands in memory (or crosses the RN
+ * bridge as base64). On HTTP 200 the temp file is moved to `destPath`; other
+ * statuses return the (small) body so JS can surface 204/errors. Reports byte
+ * progress via the onProgress callback (→ onDownloadProgress event).
+ */
+private final class QwkTlsDownload: NSObject, URLSessionDownloadDelegate {
+  private let pinnedSha256: String
+  private let destPath: String
+  private let promise: Promise
+  private let onProgress: (Int64, Int64) -> Void
+  private var session: URLSession?
+  private var settled = false
+
+  private init(pinnedSha256: String, destPath: String, promise: Promise, onProgress: @escaping (Int64, Int64) -> Void) {
+    self.pinnedSha256 = pinnedSha256.uppercased().filter { $0.isHexDigit }
+    self.destPath = destPath
+    self.promise = promise
+    self.onProgress = onProgress
+    super.init()
+  }
+
+  static func perform(
+    options: [String: Any],
+    destPath: String,
+    promise: Promise,
+    onProgress: @escaping (Int64, Int64) -> Void
+  ) {
+    guard
+      let urlString = options["url"] as? String,
+      let url = URL(string: urlString),
+      let pinned = options["pinnedSha256"] as? String
+    else {
+      promise.reject("QWK_TLS_ARGS", "invalid download options")
+      return
+    }
+    QwkTlsDownload(pinnedSha256: pinned, destPath: destPath, promise: promise, onProgress: onProgress)
+      .start(url: url, options: options)
+  }
+
+  private func settle(_ result: [String: Any]) {
+    if settled { return }
+    settled = true
+    promise.resolve(result)
+    session?.finishTasksAndInvalidate()
+  }
+
+  private func fail(_ message: String) {
+    if settled { return }
+    settled = true
+    promise.reject("QWK_TLS_DOWNLOAD", message)
+    session?.finishTasksAndInvalidate()
+  }
+
+  private func start(url: URL, options: [String: Any]) {
+    var request = URLRequest(url: url)
+    request.httpMethod = (options["method"] as? String) ?? "GET"
+    request.timeoutInterval = 120
+    if let headers = options["headers"] as? [String: Any] {
+      for (key, value) in headers { request.setValue("\(value)", forHTTPHeaderField: key) }
+    }
+    let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+    self.session = session
+    session.downloadTask(with: request).resume()
+  }
+
+  private func headerMap(_ http: HTTPURLResponse) -> [String: String] {
+    var headers: [String: String] = [:]
+    for (key, value) in http.allHeaderFields {
+      if let k = key as? String { headers[k] = "\(value)" }
+    }
+    return headers
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  ) {
+    onProgress(totalBytesWritten, totalBytesExpectedToWrite)
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didFinishDownloadingTo location: URL
+  ) {
+    guard let http = downloadTask.response as? HTTPURLResponse else {
+      fail("no HTTP response")
+      return
+    }
+    let headers = headerMap(http)
+    if http.statusCode == 200 {
+      // Move the streamed temp file into place (must happen before this delegate
+      // returns, while `location` is still valid).
+      let dest = URL(fileURLWithPath: destPath)
+      do {
+        try? FileManager.default.removeItem(at: dest)
+        try FileManager.default.createDirectory(
+          at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: location, to: dest)
+        let size = (try? FileManager.default.attributesOfItem(atPath: destPath)[.size] as? Int) ?? 0
+        settle(["status": 200, "headers": headers, "bytesWritten": size ?? 0])
+      } catch {
+        fail("move failed: \(error.localizedDescription)")
+      }
+    } else {
+      // 204 / errors: return the small body (if any) so JS maps it the same way
+      // as a normal fetch (204 = nothing new, 4xx/5xx = JSON error).
+      let data = (try? Data(contentsOf: location)) ?? Data()
+      settle(["status": http.statusCode, "headers": headers, "bodyBase64": data.base64EncodedString()])
+    }
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    // Success paths already settled in didFinishDownloadingTo; this catches
+    // transport/TLS failures (incl. a cancelled pin mismatch).
+    if let error = error { fail(error.localizedDescription) }
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    guard
+      challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+      let trust = challenge.protectionSpace.serverTrust
+    else {
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+    let (disposition, credential) = pinnedChallengeDisposition(trust, pinnedSha256)
+    completionHandler(disposition, credential)
   }
 }
