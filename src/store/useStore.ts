@@ -86,6 +86,7 @@ export interface AppState {
 
   // outbox
   addDraft: (draft: Omit<Draft, 'id'>) => void;
+  updateDraft: (id: string, patch: Partial<Omit<Draft, 'id'>>) => void;
   removeDraft: (id: string) => void;
   uploadRep: () => void;
   clearReport: () => void;
@@ -361,6 +362,10 @@ export const useStore = create<AppState>((set, get) => {
       set((s) => ({ drafts: [...s.drafts, { ...draft, id: nextId('d') }] }));
       persist();
     },
+    updateDraft: (id, patch) => {
+      set((s) => ({ drafts: s.drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)) }));
+      persist();
+    },
     removeDraft: (id) => {
       set((s) => ({ drafts: s.drafts.filter((d) => d.id !== id) }));
       persist();
@@ -452,6 +457,7 @@ export function activeBoard(state: AppState): Board | undefined {
 export function messagesForArea(messages: Message[], areaId: string): Message[] {
   return messages.filter((m) => m.areaId === areaId);
 }
+export { draftsForMessage } from './draftSelectors';
 export function privateMessages(messages: Message[]): Message[] {
   return messages.filter((m) => m.isPrivate);
 }
