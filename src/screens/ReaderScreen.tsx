@@ -57,6 +57,7 @@ export function ReaderScreen({ navigation, route }: Props) {
 
   function openReply() {
     navigation.navigate('Compose', {
+      mode: 'reply' as const,
       toHandle: msg.from,
       subject: msg.subject.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject}`,
       conferenceNumber: area?.qwkConference ?? 0,

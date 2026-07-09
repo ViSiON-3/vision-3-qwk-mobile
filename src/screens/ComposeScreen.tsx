@@ -14,7 +14,7 @@ export function ComposeScreen({ navigation, route }: Props) {
   const addDraft = useStore((s) => s.addDraft);
   const toast = useToast();
 
-  const [subject, setSubject] = useState(route.params.subject);
+  const [subject, setSubject] = useState(route.params.subject ?? '');
   const [body, setBody] = useState('');
 
   const save = () => {
@@ -23,11 +23,11 @@ export function ComposeScreen({ navigation, route }: Props) {
       return;
     }
     addDraft({
-      to: toHandle,
+      to: toHandle ?? '',
       from: board?.handle ?? '',
       subject: subject.trim() || 'Re:',
-      areaName,
-      conferenceNumber,
+      areaName: areaName ?? '',
+      conferenceNumber: conferenceNumber ?? 0,
       priv: !!priv,
       body,
       reference,
