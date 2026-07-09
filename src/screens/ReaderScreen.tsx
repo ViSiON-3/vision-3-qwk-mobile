@@ -37,7 +37,9 @@ export function ReaderScreen({ navigation, route }: Props) {
   const area = areas.find((a) => a.id === areaId);
 
   const drafts = useStore((s) => s.drafts);
-  const savedReplies = msg && area ? draftsForMessage(drafts, msg.number, area.qwkConference) : [];
+  const savedReplies = msg
+    ? draftsForMessage(drafts, msg.number, area?.qwkConference ?? PRIVATE_CONFERENCE)
+    : [];
 
   useEffect(() => {
     if (msg) markRead(msg.id);
