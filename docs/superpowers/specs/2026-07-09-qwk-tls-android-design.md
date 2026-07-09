@@ -87,10 +87,13 @@ Package `expo.modules.qwktls`, files under `src/main/java/expo/modules/qwktls/`.
   `URLCredential(trust:)`; a self-signed BBS cert generally won't match the
   hostname, and the fingerprint is the stronger check.
 - `client(pinnedSha256, connectTimeout, readTimeout): OkHttpClient` — builds a
-  per-call client with the pinned socket factory. Redirects: OkHttp's default
-  (follow) is acceptable — pinning applies to every connection the client
-  makes, and same-host API redirects are the only realistic case; iOS
-  URLSession likewise follows redirects with the same pinned delegate.
+  per-call client with the pinned socket factory. Redirects: same-scheme
+  (HTTPS→HTTPS) redirects are followed — pinning applies to every connection
+  the client makes, and same-host API redirects are the only realistic case,
+  matching iOS URLSession with the same pinned delegate. Cross-protocol
+  (HTTPS→HTTP) redirects are blocked via `followSslRedirects(false)` so a
+  cleartext downgrade can never carry pinned-session headers outside the pin
+  (iOS gets the equivalent from ATS).
 
 ### `request` path
 

@@ -47,10 +47,18 @@ object QwkTlsRequest {
         null
       }
 
-    val builder = Request.Builder().url(url).method(method, body)
-    for ((name, value) in options.headers) builder.header(name, value)
+    val request = try {
+      val builder = Request.Builder().url(url).method(method, body)
+      for ((name, value) in options.headers) builder.header(name, value)
+      builder.build()
+    } catch (e: IllegalArgumentException) {
+      // Invalid method token or header characters — an argument problem, not a
+      // transport failure, so keep the contract's arg code.
+      promise.reject("QWK_TLS_ARGS", e.message ?: "invalid request options", e)
+      return
+    }
 
-    pinnedClient(options.pinnedSha256, 30, 30).newCall(builder.build()).enqueue(object : Callback {
+    pinnedClient(options.pinnedSha256, 30, 30).newCall(request).enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) {
         // Includes TLS failures — a pin mismatch surfaces here, fail closed.
         promise.reject("QWK_TLS_REQUEST", e.message ?: "request failed", e)

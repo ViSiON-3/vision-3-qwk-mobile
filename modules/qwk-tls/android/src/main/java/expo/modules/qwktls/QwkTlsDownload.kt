@@ -31,10 +31,18 @@ object QwkTlsDownload {
       promise.reject("QWK_TLS_ARGS", "invalid download options", null)
       return
     }
-    val builder = Request.Builder().url(url).method(options.method.uppercase(), null)
-    for ((name, value) in options.headers) builder.header(name, value)
+    val request = try {
+      val builder = Request.Builder().url(url).method(options.method.uppercase(), null)
+      for ((name, value) in options.headers) builder.header(name, value)
+      builder.build()
+    } catch (e: IllegalArgumentException) {
+      // Invalid method (incl. a body-requiring method with our null body) or
+      // header characters — argument problem, keep the contract's arg code.
+      promise.reject("QWK_TLS_ARGS", e.message ?: "invalid download options", e)
+      return
+    }
 
-    pinnedClient(options.pinnedSha256, 30, 120).newCall(builder.build()).enqueue(object : Callback {
+    pinnedClient(options.pinnedSha256, 30, 120).newCall(request).enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) {
         // Includes TLS failures — a pin mismatch surfaces here, fail closed.
         promise.reject("QWK_TLS_DOWNLOAD", e.message ?: "download failed", e)
