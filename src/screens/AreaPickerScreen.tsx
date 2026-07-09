@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, fontSize, spacing } from '../theme/tokens';
-import { Screen, Mono, Card } from '../components';
+import { Screen, Mono, Vga, Card, ListRow } from '../components';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 
@@ -27,11 +27,16 @@ export function AreaPickerScreen({ navigation }: Props) {
       <Mono size={fontSize.listMeta} color={colors.textMuted}>Choose an area to post in</Mono>
       <Card style={styles.list}>
         {areas.map((a, i) => (
-          <View key={a.id} style={[styles.row, i < areas.length - 1 && styles.divider]}>
-            <Mono size={fontSize.body} color={colors.textPrimary} onPress={() => choose(a)}>
-              {a.name}
-            </Mono>
-          </View>
+          <ListRow key={a.id} onPress={() => choose(a)} last={i === areas.length - 1}>
+            <View style={styles.content}>
+              <Vga size={16} color={colors.textPrimary}>
+                {a.name}
+              </Vga>
+              <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.subline}>
+                {a.tag}
+              </Mono>
+            </View>
+          </ListRow>
         ))}
       </Card>
     </Screen>
@@ -40,6 +45,6 @@ export function AreaPickerScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   list: { padding: 0, overflow: 'hidden', marginTop: spacing.md },
-  row: { padding: spacing.md },
-  divider: { borderBottomWidth: 1, borderBottomColor: colors.borderDivider },
+  content: { flex: 1 },
+  subline: { marginTop: 3 },
 });
