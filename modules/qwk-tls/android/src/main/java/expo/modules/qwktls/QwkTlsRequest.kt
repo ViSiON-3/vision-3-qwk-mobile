@@ -33,6 +33,12 @@ object QwkTlsRequest {
       promise.reject("QWK_TLS_ARGS", "invalid base64 body", e)
       return
     }
+    // OkHttp forbids a body on GET/HEAD — reject with the contract's arg code
+    // instead of letting Request.Builder.method() throw a generic exception.
+    if (bodyBytes != null && (method == "GET" || method == "HEAD")) {
+      promise.reject("QWK_TLS_ARGS", "$method request cannot carry a body", null)
+      return
+    }
     // OkHttp requires a body for POST/PUT/PATCH even when JS sent none.
     val body = bodyBytes?.toRequestBody(null)
       ?: if (method == "POST" || method == "PUT" || method == "PATCH") {
@@ -51,20 +57,22 @@ object QwkTlsRequest {
       }
 
       override fun onResponse(call: Call, response: Response) {
-        try {
+        // Build the result inside use{} but settle only after the response is
+        // closed, so a throwing close() can never double-settle the promise.
+        val result = try {
           response.use {
             val bytes = it.body?.bytes() ?: ByteArray(0)
-            promise.resolve(
-              mapOf(
-                "status" to it.code,
-                "headers" to headerMap(it.headers),
-                "bodyBase64" to Base64.encodeToString(bytes, Base64.NO_WRAP),
-              )
+            mapOf(
+              "status" to it.code,
+              "headers" to headerMap(it.headers),
+              "bodyBase64" to Base64.encodeToString(bytes, Base64.NO_WRAP),
             )
           }
         } catch (e: Exception) {
           promise.reject("QWK_TLS_REQUEST", e.message ?: "request failed", e)
+          return
         }
+        promise.resolve(result)
       }
     })
   }
