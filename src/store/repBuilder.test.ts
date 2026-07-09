@@ -1,5 +1,5 @@
 import { unzipSync, strFromU8 } from 'fflate';
-import { buildRepFromDrafts } from './repBuilder';
+import { buildRepFromDrafts, finalizeReplyBody } from './repBuilder';
 import { parseMessagesDat } from '../qwk';
 import { Draft } from './types';
 
@@ -39,5 +39,38 @@ describe('buildRepFromDrafts', () => {
     const headers = strFromU8(files['HEADERS.DAT']);
     expect(headers).toContain('In-Reply-To');
     expect(headers).toContain('<2048@fsx>');
+  });
+});
+
+const TAG = '--- ViSiON QWK Editor v0.1.0 (iOS)';
+
+describe('finalizeReplyBody', () => {
+  it('sanitizes, wraps to 79, and appends the tag line', () => {
+    const out = finalizeReplyBody('He said "hi"', TAG);
+    expect(out).toBe(`He said "hi"\n\n${TAG}`);
+  });
+
+  it('wraps long input to <=79 columns', () => {
+    const out = finalizeReplyBody('word '.repeat(30).trim(), TAG);
+    for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(79);
+  });
+
+  it('omits the tag line when none is supplied', () => {
+    expect(finalizeReplyBody('hi', '')).toBe('hi');
+  });
+});
+
+describe('buildRepFromDrafts with a tag line', () => {
+  it('stamps the tag line into the packed body exactly once', () => {
+    const d: Draft[] = [
+      { id: 'd1', to: 'Avon', from: 'Zaphod', subject: 'Re: x', areaName: '', conferenceNumber: 3, priv: false, body: 'hello' },
+    ];
+    const once = buildRepFromDrafts('V3HQ', d, TAG);
+    const twice = buildRepFromDrafts('V3HQ', d, TAG);
+    expect(Array.from(once)).toEqual(Array.from(twice)); // idempotent
+    const files = unzipSync(once);
+    const msgs = parseMessagesDat(files['V3HQ.MSG']);
+    expect(msgs[0].body).toContain(TAG);
+    expect(msgs[0].body.split(TAG).length - 1).toBe(1); // stamped once
   });
 });
