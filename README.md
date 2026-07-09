@@ -11,7 +11,81 @@ and the server-side [QWK Packet API](https://github.com/ViSiON-3/vision-3-bbs/bl
 ship in the `vision-3-bbs` repo; this repo is the mobile client that consumes
 that API.
 
-## Start here
+## Status
+
+The full offline loop is implemented: **connect → sync → read → compose/reply →
+upload → import report**. Built across six merged PRs:
+
+1. **Foundation** — QWK/REP packet engine, app shell + navigation, offline
+   store, API client core.
+2. **Live sync** — server-driven conference/area taxonomy from `CONTROL.DAT`,
+   reply threading (`reference` + HEADERS.DAT `In-Reply-To`).
+3. **BBSID adoption** — the board adopts the server's real BBSID from the
+   synced packet so `.REP` uploads route correctly.
+4. **TLS trust-on-first-use** — SHA-256 fingerprint capture + pinned transport
+   for the API's self-signed default cert (real CA certs also supported).
+5. **Streamed downloads** — packets stream straight to disk through the native
+   transport with real byte-level progress.
+6. **Message editor** — compose/reply with Private/Quote pre-prompts,
+   Save/Kill/Edit flow, New Message into any area (including private mail),
+   inline saved-reply editing in the reader, and a pack-time
+   **sanitize → 79-col wrap → tag-line** pipeline so modern-keyboard Unicode
+   never corrupts classic boards. `.REP` output is deterministic, so retried
+   uploads are idempotent (the server de-dupes).
+
+### What's where
+
+- `src/qwk/` — pure, Node-testable packet engine: QWK reader, REP writer,
+  CP437/UTF-8 handling, HEADERS.DAT, NDX, plus the editor text pipeline
+  (`sanitize`, `wrap`, `quote`, `tagline`). Format notes in
+  [docs/qwk/FORMAT.md](docs/qwk/FORMAT.md).
+- `src/api/` — QWK Packet API client, bearer-token session, pinned fetch,
+  TOFU fingerprint capture.
+- `src/store/` — Zustand app state, AsyncStorage persistence (passwords in the
+  OS keychain), packet byte cache, board-scoped outbox drafts, `.REP` builder.
+- `src/screens/`, `src/navigation/`, `src/components/`, `src/theme/` — the
+  15-screen UI recreating the high-fidelity design handoff (CRT styling, VGA
+  font).
+- `modules/qwk-tls/` — native TLS-pinning + streaming-download module
+  (**iOS only so far**). Where the native module is absent (Android, Expo Go),
+  pinned boards fail with a clear "needs a development build" error; boards
+  without a pinned fingerprint use the platform fetch.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/` — the design specs
+  and implementation plans each feature was built from.
+
+### Known gaps / next up
+
+- **Android parity** for the native TLS-pinning/streaming module.
+- **On-device pass**: the native Save/Kill/Edit prompt and autocorrect
+  injection need a real device or simulator (`Alert` is a no-op on web).
+- **Quote format confirmation**: the attribution wording and initials rule in
+  `src/qwk/quote.ts` are marked PROVISIONAL pending confirmation against
+  `vision-3-bbs`.
+- **Live-instance round trip** against a ViSiON/3 board with
+  `qwkAPI.enabled=true`, including interrupted downloads and duplicate uploads.
+- Future editor features (per spec): edit subject/To on replies, CP437 char
+  picker, color selection, auto-signature, tag-line library, bulletin/news
+  display.
+
+## Development
+
+```bash
+npm install
+npm test            # 153 Jest tests (packet engine, store, API — Node env)
+npm run typecheck   # tsc --noEmit
+npm start           # Expo dev server (iOS/Android via Expo Go or dev build)
+npm run web         # browser-run for quick manual passes (see note)
+```
+
+**Web note:** `expo start --web` is a dev/debug affordance — packet bytes live
+in memory for the session (expo-file-system has no web support) and the native
+Save/Kill/Edit `Alert` doesn't fire. Verify those flows on a device.
+
+**Demo mode** (Settings → demo) exercises the full loop against a generated
+sample packet with no server: sync imports a sample `.QWK`, upload compiles and
+"imports" your real drafts.
+
+## Start here (contributors)
 
 Read **[docs/design/design_handoff_qwk_mobile/PHASE8-KICKOFF.md](docs/design/design_handoff_qwk_mobile/PHASE8-KICKOFF.md)**
 first — it contains:
@@ -23,14 +97,7 @@ first — it contains:
   (design tokens, typography, per-screen notes) + the HTML prototype and 15
   screenshots covering the full offline loop.
 
-Then kick off with the superpowers **brainstorming → writing-plans →
-subagent-driven-development** flow, decomposing the app into sub-projects (app
-shell + navigation, connect/auth, sync/download, offline store + reader,
-compose/outbox/upload, settings/boards/storage). Do **not** spec the whole app
-at once.
-
-## Status
-
-Greenfield — the tech stack (RN navigation/styling libraries, offline store,
-whether to embed a QWK engine or wrap a reader core) is decided during
-brainstorming. Nothing is built yet.
+New features follow the superpowers **brainstorming → writing-plans →
+subagent-driven-development** flow: each sub-project gets its own spec in
+`docs/superpowers/specs/` and plan in `docs/superpowers/plans/` before
+implementation. Branch per change; PRs for review.
