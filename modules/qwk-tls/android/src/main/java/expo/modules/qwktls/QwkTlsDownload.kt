@@ -91,8 +91,14 @@ object QwkTlsDownload {
           }
         }
       }
-      if (dest.exists() && !dest.delete()) throw IOException("could not replace existing file")
-      if (!part.renameTo(dest)) throw IOException("could not move download into place")
+      // rename(2) atomically replaces an existing destination on Android; only
+      // if that fails fall back to delete+rename, so a previously-good file is
+      // never destroyed before its replacement is known to land.
+      if (!part.renameTo(dest)) {
+        if (!dest.exists() || !dest.delete() || !part.renameTo(dest)) {
+          throw IOException("could not move download into place")
+        }
+      }
     } catch (e: Exception) {
       part.delete() // never leave a partial file behind
       throw e // caller rejects QWK_TLS_DOWNLOAD
