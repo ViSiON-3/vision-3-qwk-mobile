@@ -5,6 +5,7 @@ import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/token
 import { Screen, Mono, Vga, Card, Button } from '../components';
 import { RootStackParamList } from '../navigation/types';
 import { useStore, messagesForArea } from '../store/useStore';
+import { PRIVATE_CONFERENCE } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
 
@@ -56,16 +57,18 @@ export function ReaderScreen({ navigation, route }: Props) {
   );
 
   function openReply() {
-    navigation.navigate('Compose', {
-      mode: 'reply' as const,
+    const conf = area?.qwkConference ?? 0;
+    navigation.navigate('ComposeOptions', {
+      mode: 'reply',
       toHandle: msg.from,
       subject: msg.subject.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject}`,
-      conferenceNumber: area?.qwkConference ?? 0,
+      conferenceNumber: conf,
       areaName: area?.name ?? '',
-      priv: msg.isPrivate,
-      // Thread the reply back to this message (in-packet ref + durable Message-ID).
+      privateArea: conf === PRIVATE_CONFERENCE || msg.isPrivate,
       reference: msg.number,
       inReplyTo: msg.messageId,
+      parentBody: msg.body,
+      parentAuthor: msg.from,
     });
   }
 
