@@ -20,8 +20,6 @@ export function StatusLine() {
         {board.name}
       </Vga>
       <Vga color={colors.textMuted} size={fontSize.eyebrow} spacing={0.5} style={styles.text}>
-        {' · '}
-        {board.bbsId}
         {' · NODE '}
         {board.node ?? '1'}
       </Vga>

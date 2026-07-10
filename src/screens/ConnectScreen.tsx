@@ -86,7 +86,7 @@ export function ConnectScreen({ navigation }: Props) {
 
           <Pressable onPress={() => navigation.navigate('Boards')} style={styles.credLink}>
             <Mono color={colors.textDim} size={fontSize.listMeta}>
-              credentials managed per board — edit in Boards ›
+              Edit Boards ›
             </Mono>
           </Pressable>
         </>
