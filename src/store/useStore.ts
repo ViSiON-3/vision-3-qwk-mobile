@@ -330,7 +330,10 @@ export const useStore = create<AppState>((set, get) => {
           kb: Math.max(1, Math.round(bytes.length / 1024)),
           date: stamp(),
         };
-        const adopted = bbsId !== board.bbsId || sysop !== board.sysop;
+        // Packet re-keying is tied to the bbsId alone — a sysop-only change
+        // updates the board record without touching cached packet entries.
+        const rekey = bbsId !== board.bbsId;
+        const adopted = rekey || sysop !== board.sysop;
         set((s) => ({
           boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId, sysop } : b)) : s.boards,
           // Re-key this board's existing packets to the adopted id too, so
@@ -338,7 +341,7 @@ export const useStore = create<AppState>((set, get) => {
           // instead of orphaning it under the old derived id.
           packets: [
             meta,
-            ...(adopted
+            ...(rekey
               ? s.packets.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
               : s.packets),
           ],
