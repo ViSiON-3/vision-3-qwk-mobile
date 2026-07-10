@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button, GearButton, ConsoleProgress, useToast } from '../components';
-import { TabParamList } from '../navigation/types';
+import { RootStackParamList, TabParamList } from '../navigation/types';
 import { useStore, activeBoard, unreadTotal, privateUnread, draftsForBoard } from '../store/useStore';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -21,6 +24,7 @@ const SYNC_LINES = [
 type Props = BottomTabScreenProps<TabParamList, 'Sync'>;
 
 export function SyncScreen({ navigation }: Props) {
+  const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const board = useStore(activeBoard);
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
@@ -43,17 +47,25 @@ export function SyncScreen({ navigation }: Props) {
 
   return (
     <Screen title="OFFLINE MAIL" right={<GearButton />} scroll>
-      <Card style={styles.identity}>
-        <Image source={LOGO} style={styles.identityLogo} resizeMode="contain" />
-        <View style={styles.identityText}>
-          <Vga color={colors.textPrimary} size={16}>
-            {board?.name}
-          </Vga>
-          <Mono color={colors.textMuted} size={fontSize.listMeta}>
-            sysop {board?.sysop ?? '—'} · {board?.host}
-          </Mono>
-        </View>
-      </Card>
+      <Pressable
+        onPress={() => rootNav.navigate('Boards')}
+        accessibilityRole="button"
+        accessibilityLabel={`${board?.name ?? 'Board'} — open boards`}
+        style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+      >
+        <Card style={styles.identity}>
+          <Image source={LOGO} style={styles.identityLogo} resizeMode="contain" />
+          <View style={styles.identityText}>
+            <Vga color={colors.textPrimary} size={16}>
+              {board?.name}
+            </Vga>
+            <Mono color={colors.textMuted} size={fontSize.listMeta}>
+              sysop {board?.sysop ?? '—'} · {board?.host}
+            </Mono>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Card>
+      </Pressable>
 
       <View style={styles.statsRow}>
         <Card style={styles.unreadCard}>
