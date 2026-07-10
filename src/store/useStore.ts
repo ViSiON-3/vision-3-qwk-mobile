@@ -61,6 +61,9 @@ export interface AppState {
    */
   downloadProgress: number | null;
   lastPacket: Packet | null;
+  /** Outcome of the most recent sync: a packet arrived, or the board had no new
+   * mail (server 204). null before the first sync or after a failed one. */
+  lastSyncResult: 'packet' | 'none' | null;
 
   /** Messages parsed from the active board's cached packets. */
   messages: Message[];
@@ -193,6 +196,7 @@ export const useStore = create<AppState>((set, get) => {
     syncing: false,
     downloadProgress: null,
     lastPacket: null,
+    lastSyncResult: null,
 
     messages: [],
     conferences: [],
@@ -265,11 +269,11 @@ export const useStore = create<AppState>((set, get) => {
     syncNow: async () => {
       const board = activeBoardOf();
       if (!board) return;
-      set({ syncing: true, error: null });
+      set({ syncing: true, error: null, lastSyncResult: null });
       if (get().settings.demoMode) {
         setTimeout(async () => {
           await importSamplePacket();
-          set({ syncing: false });
+          set({ syncing: false, lastSyncResult: 'packet' });
         }, 1800);
         return;
       }
@@ -300,7 +304,7 @@ export const useStore = create<AppState>((set, get) => {
         }
         set({ downloadProgress: null });
         if (result.kind === 'none') {
-          set({ syncing: false }); // no new mail; nothing to commit
+          set({ syncing: false, lastSyncResult: 'none' }); // no new mail; nothing to commit
           return;
         }
 
@@ -362,7 +366,7 @@ export const useStore = create<AppState>((set, get) => {
           };
         });
         await reloadMessages();
-        set({ syncing: false });
+        set({ syncing: false, lastSyncResult: 'packet' });
         persist();
       } catch (e) {
         set({ syncing: false, downloadProgress: null, error: describeSyncError(e) });
