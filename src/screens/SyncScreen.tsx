@@ -128,7 +128,7 @@ export function SyncScreen({ navigation }: Props) {
               </Mono>
             </Card>
           )}
-          <Button title="⟱ PACK NEW MAIL" onPress={syncNow} style={styles.pack} />
+          <Button title="⟱ CHECK FOR NEW MESSAGES" onPress={syncNow} style={styles.pack} />
         </>
       )}
     </Screen>
