@@ -47,7 +47,12 @@ export function SyncScreen({ navigation }: Props) {
 
   return (
     <Screen title="OFFLINE MAIL" right={<GearButton />} scroll>
-      <Pressable onPress={() => rootNav.navigate('Boards')}>
+      <Pressable
+        onPress={() => rootNav.navigate('Boards')}
+        accessibilityRole="button"
+        accessibilityLabel={`${board?.name ?? 'Board'} — open boards`}
+        style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+      >
         <Card style={styles.identity}>
           <Image source={LOGO} style={styles.identityLogo} resizeMode="contain" />
           <View style={styles.identityText}>
