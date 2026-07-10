@@ -173,6 +173,7 @@ export const useStore = create<AppState>((set, get) => {
       areas: tax.areas.length,
       kb: Math.max(1, Math.round(bytes.length / 1024)),
       date: stamp(),
+      sample: true,
     };
     set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
     await reloadMessages();
@@ -329,20 +330,31 @@ export const useStore = create<AppState>((set, get) => {
           kb: Math.max(1, Math.round(bytes.length / 1024)),
           date: stamp(),
         };
+        // A real packet supersedes any demo samples for this board: without the
+        // purge they'd be re-keyed to the adopted bbsId below and leak fake
+        // messages/conferences into the live view (reloadMessages unions every
+        // cached packet for the bbsId).
+        const sampleIds = new Set(
+          get().packets.filter((p) => p.sample && p.bbsId === board.bbsId).map((p) => p.id)
+        );
+        for (const sid of sampleIds) deletePacketBytes(sid);
         const adopted = bbsId !== board.bbsId;
-        set((s) => ({
-          boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)) : s.boards,
-          // Re-key this board's existing packets to the adopted id too, so
-          // reloadMessages (which filters by bbsId) keeps showing their history
-          // instead of orphaning it under the old derived id.
-          packets: [
-            meta,
-            ...(adopted
-              ? s.packets.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
-              : s.packets),
-          ],
-          lastPacket: meta,
-        }));
+        set((s) => {
+          const kept = s.packets.filter((p) => !sampleIds.has(p.id));
+          return {
+            boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)) : s.boards,
+            // Re-key this board's existing packets to the adopted id too, so
+            // reloadMessages (which filters by bbsId) keeps showing their history
+            // instead of orphaning it under the old derived id.
+            packets: [
+              meta,
+              ...(adopted
+                ? kept.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
+                : kept),
+            ],
+            lastPacket: meta,
+          };
+        });
         await reloadMessages();
         set({ syncing: false });
         persist();
