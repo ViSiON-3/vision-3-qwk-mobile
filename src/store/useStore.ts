@@ -229,9 +229,11 @@ export const useStore = create<AppState>((set, get) => {
         set({ boards: mockBoards, activeBoardId: mockBoards[0].id, settings: DEFAULT_SETTINGS });
         await importSamplePacket();
       }
-      // Ensure the active board has at least one packet to read.
+      // In demo mode, ensure the active board has at least one packet to read.
+      // With demo off, a board stays empty until a real sync so sample data
+      // never mixes into live testing (and deleted samples stay deleted).
       const board = activeBoardOf();
-      if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) {
+      if (get().settings.demoMode && board && !get().packets.some((p) => p.bbsId === board.bbsId)) {
         await importSamplePacket();
       }
       set({ hydrated: true });
@@ -367,7 +369,8 @@ export const useStore = create<AppState>((set, get) => {
       persist();
       void reloadMessages().then(() => {
         const board = activeBoardOf();
-        if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) void importSamplePacket();
+        if (get().settings.demoMode && board && !get().packets.some((p) => p.bbsId === board.bbsId))
+          void importSamplePacket();
       });
       return { disconnected: wasLoggedIn };
     },
