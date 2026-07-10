@@ -173,6 +173,7 @@ export const useStore = create<AppState>((set, get) => {
       areas: tax.areas.length,
       kb: Math.max(1, Math.round(bytes.length / 1024)),
       date: stamp(),
+      sample: true,
     };
     set((s) => ({ packets: [meta, ...s.packets], lastPacket: meta }));
     await reloadMessages();
@@ -225,13 +226,15 @@ export const useStore = create<AppState>((set, get) => {
         });
         await reloadMessages();
       } else {
-        // First run: seed defaults and generate an initial sample packet.
+        // First run: seed defaults; the demo-mode check below imports the
+        // initial sample packet, so seeding respects whatever demoMode defaults to.
         set({ boards: mockBoards, activeBoardId: mockBoards[0].id, settings: DEFAULT_SETTINGS });
-        await importSamplePacket();
       }
-      // Ensure the active board has at least one packet to read.
+      // In demo mode, ensure the active board has at least one packet to read.
+      // With demo off, a board stays empty until a real sync so sample data
+      // never mixes into live testing (and deleted samples stay deleted).
       const board = activeBoardOf();
-      if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) {
+      if (get().settings.demoMode && board && !get().packets.some((p) => p.bbsId === board.bbsId)) {
         await importSamplePacket();
       }
       set({ hydrated: true });
@@ -330,23 +333,34 @@ export const useStore = create<AppState>((set, get) => {
           kb: Math.max(1, Math.round(bytes.length / 1024)),
           date: stamp(),
         };
+        // A real packet supersedes any demo samples for this board: without the
+        // purge they'd be re-keyed to the adopted bbsId below and leak fake
+        // messages/conferences into the live view (reloadMessages unions every
+        // cached packet for the bbsId).
+        const sampleIds = new Set(
+          get().packets.filter((p) => p.sample && p.bbsId === board.bbsId).map((p) => p.id)
+        );
+        for (const sid of sampleIds) deletePacketBytes(sid);
         // Packet re-keying is tied to the bbsId alone — a sysop-only change
         // updates the board record without touching cached packet entries.
         const rekey = bbsId !== board.bbsId;
         const adopted = rekey || sysop !== board.sysop;
-        set((s) => ({
-          boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId, sysop } : b)) : s.boards,
-          // Re-key this board's existing packets to the adopted id too, so
-          // reloadMessages (which filters by bbsId) keeps showing their history
-          // instead of orphaning it under the old derived id.
-          packets: [
-            meta,
-            ...(rekey
-              ? s.packets.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
-              : s.packets),
-          ],
-          lastPacket: meta,
-        }));
+        set((s) => {
+          const kept = s.packets.filter((p) => !sampleIds.has(p.id));
+          return {
+            boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId, sysop } : b)) : s.boards,
+            // Re-key this board's existing packets to the adopted id too, so
+            // reloadMessages (which filters by bbsId) keeps showing their history
+            // instead of orphaning it under the old derived id.
+            packets: [
+              meta,
+              ...(rekey
+                ? kept.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
+                : kept),
+            ],
+            lastPacket: meta,
+          };
+        });
         await reloadMessages();
         set({ syncing: false });
         persist();
@@ -373,7 +387,8 @@ export const useStore = create<AppState>((set, get) => {
       persist();
       void reloadMessages().then(() => {
         const board = activeBoardOf();
-        if (board && !get().packets.some((p) => p.bbsId === board.bbsId)) void importSamplePacket();
+        if (get().settings.demoMode && board && !get().packets.some((p) => p.bbsId === board.bbsId))
+          void importSamplePacket();
       });
       return { disconnected: wasLoggedIn };
     },
