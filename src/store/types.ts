@@ -84,6 +84,8 @@ export interface Packet {
   areas: number;
   kb: number;
   date: string;
+  /** Demo-mode sample packet — purged when a real packet arrives for the board. */
+  sample?: boolean;
 }
 
 export interface ImportReport {
