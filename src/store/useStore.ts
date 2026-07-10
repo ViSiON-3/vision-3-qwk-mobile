@@ -226,9 +226,9 @@ export const useStore = create<AppState>((set, get) => {
         });
         await reloadMessages();
       } else {
-        // First run: seed defaults and generate an initial sample packet.
+        // First run: seed defaults; the demo-mode check below imports the
+        // initial sample packet, so seeding respects whatever demoMode defaults to.
         set({ boards: mockBoards, activeBoardId: mockBoards[0].id, settings: DEFAULT_SETTINGS });
-        await importSamplePacket();
       }
       // In demo mode, ensure the active board has at least one packet to read.
       // With demo off, a board stays empty until a real sync so sample data
