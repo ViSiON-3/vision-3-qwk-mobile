@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +10,15 @@ import { colors, fontSize, spacing, radius } from '../theme/tokens';
 import { RootStackParamList, TabParamList } from '../navigation/types';
 import { useStore, areasForConference, unreadInConference } from '../store/useStore';
 
+/** Tab navigator nested in the root stack: one object serves both. */
+type ConfNav = CompositeNavigationProp<
+  BottomTabNavigationProp<TabParamList, 'Conf'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 /** CONF tab — top-level list of conferences (message networks). */
 export function ConferencesScreen() {
-  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const tabNav = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  const nav = useNavigation<ConfNav>();
   const readIds = useStore((s) => s.readIds);
   const messages = useStore((s) => s.messages);
   const conferences = useStore((s) => s.conferences);
@@ -20,7 +26,7 @@ export function ConferencesScreen() {
 
   if (conferences.length === 0) {
     return (
-      <Screen title="CONFERENCES" onBack={() => tabNav.navigate('Sync')} right={<GearButton />} scroll>
+      <Screen title="CONFERENCES" onBack={() => nav.navigate('Sync')} right={<GearButton />} scroll>
         <View style={styles.empty}>
           <Ionicons name="layers-outline" size={48} color={colors.textDim} />
           <Vga size={fontSize.body} color={colors.textMuted} style={styles.emptyText}>
@@ -35,7 +41,7 @@ export function ConferencesScreen() {
   }
 
   return (
-    <Screen title="CONFERENCES" onBack={() => tabNav.navigate('Sync')} right={<GearButton />} scroll>
+    <Screen title="CONFERENCES" onBack={() => nav.navigate('Sync')} right={<GearButton />} scroll>
       <Eyebrow>{`TAGGED NETWORKS · ${conferences.length} CONFERENCES`}</Eyebrow>
       <Card style={styles.card}>
         {conferences.map((conf, i) => {
