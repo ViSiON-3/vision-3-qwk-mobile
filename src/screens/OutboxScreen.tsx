@@ -1,8 +1,11 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button, Chip, Eyebrow, GearButton, ConsoleProgress } from '../components';
+import { TabParamList } from '../navigation/types';
 import { useStore, activeBoard, draftsForBoard } from '../store/useStore';
 import { ImportReport } from '../store/types';
 
@@ -28,6 +31,7 @@ function ReportCell({ label, value, color }: { label: string; value: number; col
 }
 
 export function OutboxScreen() {
+  const tabNav = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const uploading = useStore((s) => s.uploading);
   const report = useStore((s) => s.report);
   const uploadRep = useStore((s) => s.uploadRep);
@@ -39,7 +43,7 @@ export function OutboxScreen() {
   const drafts = draftsForBoard(useStore((s) => s.drafts), board?.id ?? '');
 
   return (
-    <Screen title="OUTBOX" right={<GearButton />} scroll>
+    <Screen title="OUTBOX" onBack={() => tabNav.navigate('Sync')} right={<GearButton />} scroll>
       {uploading ? (
         <ConsoleProgress lines={UPLOAD_LINES} showBar accent={colors.green} />
       ) : report ? (
