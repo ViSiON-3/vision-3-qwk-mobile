@@ -319,6 +319,9 @@ export const useStore = create<AppState>((set, get) => {
         // and a mismatch gets REP uploads rejected (wrongBBS). Everything keyed
         // by bbsId (packet meta, message ids, the .REP block-0 id) uses this.
         const bbsId = parsed.control.bbsId || board.bbsId;
+        // Adopt the sysop name the same way — the seeded board value is a
+        // placeholder until the server's CONTROL.DAT says who actually runs it.
+        const sysop = parsed.control.sysop || board.sysop;
         const tax = buildTaxonomy(parsed.control.conferences);
         const meta: Packet = {
           id,
@@ -338,17 +341,20 @@ export const useStore = create<AppState>((set, get) => {
           get().packets.filter((p) => p.sample && p.bbsId === board.bbsId).map((p) => p.id)
         );
         for (const sid of sampleIds) deletePacketBytes(sid);
-        const adopted = bbsId !== board.bbsId;
+        // Packet re-keying is tied to the bbsId alone — a sysop-only change
+        // updates the board record without touching cached packet entries.
+        const rekey = bbsId !== board.bbsId;
+        const adopted = rekey || sysop !== board.sysop;
         set((s) => {
           const kept = s.packets.filter((p) => !sampleIds.has(p.id));
           return {
-            boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId } : b)) : s.boards,
+            boards: adopted ? s.boards.map((b) => (b.id === board.id ? { ...b, bbsId, sysop } : b)) : s.boards,
             // Re-key this board's existing packets to the adopted id too, so
             // reloadMessages (which filters by bbsId) keeps showing their history
             // instead of orphaning it under the old derived id.
             packets: [
               meta,
-              ...(adopted
+              ...(rekey
                 ? kept.map((p) => (p.bbsId === board.bbsId ? { ...p, bbsId, file: `${bbsId}.QWK` } : p))
                 : kept),
             ],
