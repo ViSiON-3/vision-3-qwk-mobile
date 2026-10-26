@@ -30,6 +30,8 @@ export interface AreaIndexArea {
   type?: string;
   /** Network key for networked areas, e.g. "fsxnet". */
   network?: string;
+  /** Human-readable network name, when the server knows one (e.g. "fsxNet"). */
+  networkName?: string;
 }
 
 export interface AreaIndex {
@@ -95,6 +97,7 @@ export function parseAreaIndex(bytes: Uint8Array): AreaIndex | undefined {
         conference: optStr(rec.conference),
         type: optStr(rec.type),
         network: optStr(rec.network),
+        networkName: optStr(rec.networkName),
       });
     }
   }

@@ -157,7 +157,7 @@ small JSON entry to every packet that maps each QWK conference number to its
 message area and the board conference it belongs to (as configured in the BBS's
 `conferences.json`). The client builds the CONF tab from it. Standard QWK
 readers ignore the file; packets from older servers lack it, in which case the
-client shows every area under a single "Local" conference. **Area names are
+client shows every area under a single "All Areas" conference. **Area names are
 never parsed for structure.**
 
 ```json
@@ -179,10 +179,15 @@ never parsed for structure.**
   order.
 - `areas`: in CONTROL.DAT order. `qwk` is the conference number used in
   CONTROL.DAT, the `.NDX` files and message headers. `conference` is the parent
-  conference tag, omitted for ungrouped areas (the client files those under
-  "Local"). `type` is `local`, `echomail`, `netmail`, `v3net` or `qwknet`;
-  `network` is the network key for networked areas. A conference is shown as
-  networked (NET chip) when any of its areas has a network type or key.
+  conference tag, omitted for ungrouped areas. `type` is `local`, `echomail`,
+  `netmail`, `v3net` or `qwknet`; `network` is the network key for networked
+  areas, and `networkName` an optional display name for it. A conference is
+  shown as networked (NET chip) when any of its areas has a network type or key.
+- Ungrouped areas: the client groups them by `network` (one conference per
+  network, named from `networkName` or the key), and puts ungrouped areas with
+  no network under "Other Areas". So a board that never assigned its echomail
+  areas to conferences still shows fsxNet, FidoNet, etc. as separate
+  conferences.
 
 ### Trust (TLS)
 
