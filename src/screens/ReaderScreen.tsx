@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { Screen, Mono, Vga, Card, Button, Chip } from '../components';
@@ -10,9 +10,19 @@ import { PRIVATE_CONFERENCE } from '../store/useStore';
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
 
 /** A magenta [Field] label followed by its value, Synchronet-reader style. */
-function Field({ name, value, right }: { name: string; value: string; right?: React.ReactNode }) {
+function Field({
+  name,
+  value,
+  right,
+  style,
+}: {
+  name: string;
+  value: string;
+  right?: React.ReactNode;
+  style?: ViewStyle;
+}) {
   return (
-    <View style={styles.fieldRow}>
+    <View style={[styles.fieldRow, style]}>
       <Mono size={fontSize.body} color={colors.magentaBrk}>
         [<Mono size={fontSize.body} color={colors.magenta} weight="medium">{name}</Mono>]{' '}
       </Mono>
@@ -93,8 +103,8 @@ export function ReaderScreen({ navigation, route }: Props) {
           }
         />
         <View style={styles.splitRow}>
-          <Field name="To" value={msg.to} />
-          <Mono size={fontSize.body} color={colors.magentaBrk}>
+          <Field name="To" value={msg.to} style={styles.splitField} />
+          <Mono size={fontSize.body} color={colors.magentaBrk} style={styles.when} numberOfLines={1}>
             [<Mono size={fontSize.body} color={colors.magenta} weight="medium">When</Mono>]{' '}
             <Mono size={fontSize.body} color={colors.textBody}>
               {msg.date} {msg.time}
@@ -144,8 +154,12 @@ const styles = StyleSheet.create({
   headerReply: { height: 34, paddingHorizontal: 14, borderRadius: radius.chip },
   header: { gap: 6, backgroundColor: colors.surfaceConsole },
   fieldRow: { flexDirection: 'row', alignItems: 'center' },
-  fieldValue: { flex: 1 },
+  fieldValue: { flex: 1, minWidth: 0 },
   splitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  // The To field yields to the fixed-width When stamp instead of growing to
+  // the full row and pushing it off the card.
+  splitField: { flex: 1, minWidth: 0 },
+  when: { flexShrink: 0 },
   body: { marginTop: spacing.lg, lineHeight: 20 },
   saved: { marginTop: spacing.lg, padding: 0, overflow: 'hidden' },
   savedRow: { padding: spacing.md, borderLeftWidth: 2, borderLeftColor: colors.green, gap: 3 },

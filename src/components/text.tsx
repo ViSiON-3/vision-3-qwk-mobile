@@ -36,10 +36,20 @@ export function Vga({ color = colors.textBody, size = fontSize.body, spacing, st
 }
 
 /** Screen title in IBMVGA with the optional CRT glow (settings-driven). */
-export function ScreenTitle({ children, style }: { children: React.ReactNode; style?: TextStyle }) {
+export function ScreenTitle({
+  children,
+  style,
+  numberOfLines,
+}: {
+  children: React.ReactNode;
+  style?: TextStyle;
+  numberOfLines?: number;
+}) {
   const glow = useStore((s) => s.settings.glow);
   return (
     <Text
+      numberOfLines={numberOfLines}
+      ellipsizeMode="tail"
       style={[
         styles.title,
         glow && { textShadowColor: 'rgba(85,160,255,0.4)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },

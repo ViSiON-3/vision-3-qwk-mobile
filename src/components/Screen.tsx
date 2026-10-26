@@ -41,7 +41,13 @@ export function Screen({ title, onBack, right, scroll, statusLine = true, conten
           ) : (
             <View style={styles.back} />
           )}
-          {title ? <ScreenTitle>{title}</ScreenTitle> : <View />}
+          <View style={styles.titleWrap}>
+            {title ? (
+              <ScreenTitle numberOfLines={1} style={styles.title}>
+                {title}
+              </ScreenTitle>
+            ) : null}
+          </View>
           <View style={styles.right}>{right}</View>
         </View>
       )}
@@ -68,7 +74,12 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderDivider,
     backgroundColor: colors.surfaceHeader,
   },
-  back: { flexDirection: 'row', alignItems: 'center', minWidth: 64 },
-  right: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minWidth: 64, gap: spacing.md },
+  // Back and right slots keep their natural width; the title takes what is
+  // left and truncates, so a long area name can never push the action button
+  // off the screen or run into Back.
+  back: { flexDirection: 'row', alignItems: 'center', minWidth: 64, flexShrink: 0 },
+  titleWrap: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: spacing.sm },
+  title: { textAlign: 'center' },
+  right: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minWidth: 64, flexShrink: 0, gap: spacing.md },
   body: { flex: 1 },
 });
