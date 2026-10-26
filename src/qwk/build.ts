@@ -1,6 +1,6 @@
 /**
  * QWK packet writer — complements readQwkPacket(). Builds a full .QWK zip
- * (CONTROL.DAT + MESSAGES.DAT + optional HEADERS.DAT) from a structured input.
+ * (CONTROL.DAT + MESSAGES.DAT + optional HEADERS.DAT / V3AREAS.JSON) from a structured input.
  * Used to generate sample/offline packets that flow through the real parser, and
  * by tests. RN-safe (Uint8Array + fflate).
  */
@@ -8,6 +8,7 @@ import { zipSync } from 'fflate';
 import { BLOCK_SIZE, writeField, writeAsciiInt, writeUint16LE, concatBytes } from './bytes';
 import { encodeCp437 } from './cp437';
 import { serializeHeadersDat } from './headers';
+import { serializeAreaIndex, AreaIndex, AREA_INDEX_FILE } from './areaIndex';
 
 const EOL = 0xe3;
 const ACTIVE = 0xe1;
@@ -106,7 +107,12 @@ function messageHeaderBlock(m: QwkMessageInput, textBlocks: number): Uint8Array 
 }
 
 /** Build a .QWK zip from control metadata + messages. */
-export function buildQwkPacket(input: { control: QwkControlInput; messages: QwkMessageInput[] }): Uint8Array {
+export function buildQwkPacket(input: {
+  control: QwkControlInput;
+  messages: QwkMessageInput[];
+  /** Optional V3AREAS.JSON sidecar (area/conference grouping). */
+  areaIndex?: AreaIndex;
+}): Uint8Array {
   const producer = new Uint8Array(BLOCK_SIZE).fill(0x20);
   writeField(producer, 0, BLOCK_SIZE, 'Produced by ViSiON/3 QWK Packet API');
 
@@ -135,6 +141,9 @@ export function buildQwkPacket(input: { control: QwkControlInput; messages: QwkM
   };
   if (headerSections.length > 0) {
     files['HEADERS.DAT'] = encodeCp437(serializeHeadersDat(headerSections));
+  }
+  if (input.areaIndex) {
+    files[AREA_INDEX_FILE] = serializeAreaIndex(input.areaIndex);
   }
   return zipSync(files, { mtime: 946684800000 });
 }

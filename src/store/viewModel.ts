@@ -1,3 +1,4 @@
+import type { AreaIndex } from '../qwk/areaIndex';
 import { readQwkPacket } from '../qwk';
 import { Message } from './types';
 import { PRIVATE_AREA_ID, PRIVATE_CONFERENCE, areaIdForConference } from './taxonomy';
@@ -18,6 +19,8 @@ export interface ParsedPacket {
   messages: Message[];
   /** CONTROL.DAT conference directory (number → name; 0 = private mail). */
   qwkConferences: { number: number; name: string }[];
+  /** V3AREAS.JSON grouping sidecar, when the server wrote one. */
+  areaIndex?: AreaIndex;
 }
 
 /**
@@ -49,7 +52,7 @@ export function parsePacket(bytes: Uint8Array, bbsId: string): ParsedPacket {
       messageId: m.messageId || undefined,
     });
   }
-  return { messages, qwkConferences: packet.control.conferences };
+  return { messages, qwkConferences: packet.control.conferences, areaIndex: packet.areaIndex };
 }
 
 /** Convenience wrapper when only the messages are needed. */

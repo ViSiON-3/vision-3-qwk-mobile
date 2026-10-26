@@ -1,3 +1,5 @@
+import type { AreaIndex } from './areaIndex';
+
 /** Structured model produced/consumed by the QWK/REP engine. */
 
 export interface QwkConference {
@@ -75,6 +77,8 @@ export interface QwkPacket {
   messages: QwkMessage[];
   /** Conference number -> name, for convenience. */
   conferenceNames: Map<number, string>;
+  /** ViSiON/3 V3AREAS.JSON sidecar (area/conference grouping); absent on older servers. */
+  areaIndex?: AreaIndex;
 }
 
 /** A reply the user composed offline, to be compiled into a .REP packet. */

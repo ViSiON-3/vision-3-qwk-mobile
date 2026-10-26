@@ -3,6 +3,7 @@ import { readQwkPacket } from './packet';
 import { writeRep } from './rep';
 import { controlDat, messagesDat } from './testFixtures';
 import { encodeCp437 } from './cp437';
+import { encodeUtf8 } from './utf8';
 import { ReplyDraft } from './types';
 
 function buildPacket(): Uint8Array {
@@ -23,6 +24,26 @@ function buildPacket(): Uint8Array {
 }
 
 describe('readQwkPacket', () => {
+  it('reads the V3AREAS.JSON sidecar when present and leaves it undefined otherwise', () => {
+    expect(readQwkPacket(buildPacket()).areaIndex).toBeUndefined();
+
+    const files: Record<string, Uint8Array> = { ...unzipSync(buildPacket()) };
+    files['V3AREAS.JSON'] = encodeUtf8(
+      JSON.stringify({
+        version: 1,
+        conferences: [{ tag: 'FSXNET', name: 'fsxNet' }],
+        areas: [{ qwk: 5, tag: 'FSX_GEN', name: 'fsxNet', conference: 'FSXNET', type: 'echomail', network: 'fsxnet' }],
+      })
+    );
+    const packet = readQwkPacket(zipSync(files));
+    expect(packet.areaIndex?.conferences).toEqual([{ tag: 'FSXNET', name: 'fsxNet' }]);
+    expect(packet.areaIndex?.areas[0].conference).toBe('FSXNET');
+
+    // A corrupt sidecar must not break the packet, just lose the grouping.
+    files['V3AREAS.JSON'] = encodeUtf8('{not json');
+    expect(readQwkPacket(zipSync(files)).areaIndex).toBeUndefined();
+  });
+
   it('parses control, messages, and conference names together', () => {
     const packet = readQwkPacket(buildPacket());
     expect(packet.control.bbsId).toBe('V3BBS');

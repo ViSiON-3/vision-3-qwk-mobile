@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Board, Conference, Draft, ImportReport, Message, Packet, Settings } from './types';
 import { mockBoards } from './mockData';
 import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } from './taxonomy';
+import { mergeAreaIndexes, AreaIndex } from '../qwk/areaIndex';
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
@@ -140,10 +141,12 @@ export const useStore = create<AppState>((set, get) => {
     const bbsId = board.bbsId;
     const byId = new Map<string, Message>();
     const confByNum = new Map<number, string>(); // union of CONTROL.DAT conferences
+    const indexes: (AreaIndex | undefined)[] = []; // newest-first, like packets
     for (const p of get().packets.filter((pk) => pk.bbsId === bbsId)) {
       const bytes = await readPacketBytes(p.id);
       if (!bytes) continue;
-      const { messages, qwkConferences } = parsePacket(bytes, bbsId);
+      const { messages, qwkConferences, areaIndex } = parsePacket(bytes, bbsId);
+      indexes.push(areaIndex);
       // Packets are stored newest-first, so keep the first (newest) copy of each
       // stable id — an older cached packet must not clobber newer metadata.
       for (const m of messages) if (!byId.has(m.id)) byId.set(m.id, m);
@@ -153,7 +156,8 @@ export const useStore = create<AppState>((set, get) => {
     // must not overwrite the current board's messages/taxonomy.
     if (get().activeBoardId !== boardId) return;
     const { conferences, areas } = buildTaxonomy(
-      [...confByNum.entries()].map(([number, name]) => ({ number, name }))
+      [...confByNum.entries()].map(([number, name]) => ({ number, name })),
+      mergeAreaIndexes(indexes)
     );
     set({ messages: [...byId.values()], conferences, areas });
   };
@@ -166,7 +170,7 @@ export const useStore = create<AppState>((set, get) => {
     const id = nextId('pkt');
     writePacketBytes(id, bytes);
     const parsed = readQwkPacket(bytes);
-    const tax = buildTaxonomy(parsed.control.conferences);
+    const tax = buildTaxonomy(parsed.control.conferences, parsed.areaIndex);
     const meta: Packet = {
       id,
       bbsId: board.bbsId,
@@ -326,7 +330,7 @@ export const useStore = create<AppState>((set, get) => {
         // Adopt the sysop name the same way — the seeded board value is a
         // placeholder until the server's CONTROL.DAT says who actually runs it.
         const sysop = parsed.control.sysop || board.sysop;
-        const tax = buildTaxonomy(parsed.control.conferences);
+        const tax = buildTaxonomy(parsed.control.conferences, parsed.areaIndex);
         const meta: Packet = {
           id,
           bbsId,
