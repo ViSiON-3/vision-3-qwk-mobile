@@ -16,7 +16,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
-      }
+      },
+      "appleTeamId": "Z5AHB2W5L8"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,7 +33,22 @@
     },
     "plugins": [
       "expo-font",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "./plugins/withPodMinDeploymentTarget.js",
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b5f5ae79-1519-4fea-93d5-00399943c21d"
+      }
+    }
   }
 }
