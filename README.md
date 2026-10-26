@@ -85,6 +85,33 @@ Save/Kill/Edit `Alert` doesn't fire. Verify those flows on a device.
 sample packet with no server: sync imports a sample `.QWK`, upload compiles and
 "imports" your real drafts.
 
+## Early adopters / testers
+
+This is pre-release software. There is no App Store or Play Store listing, no
+TestFlight, and no prebuilt binaries: **to run it you build and install it
+yourself.** Building and deploying a React Native app is outside the scope of
+this repo — the Expo docs cover it well, and we can't troubleshoot your
+toolchain. Pointers to get you going:
+
+- You need a **development build**, not Expo Go, because of the native
+  TLS-pinning module. See
+  [Expo: create a development build](https://docs.expo.dev/develop/development-builds/create-a-build/).
+- `app.json` carries the upstream `bundleIdentifier`, `appleTeamId` and EAS
+  `projectId`. **Replace them with your own** (or delete the last two) before
+  building, or signing will fail. `eas init` sets up your own EAS project.
+- Local: `npx expo prebuild` generates the gitignored `ios/` and `android/`
+  projects, then `npx expo run:ios --device` / `npx expo run:android`.
+- Cloud: `eas.json` has `development`, `preview` and `production` profiles
+  for [EAS Build](https://docs.expo.dev/build/introduction/).
+- **Android is behind**: the native TLS-pinning module is iOS-only so far, so
+  on Android only boards with a real CA-signed cert will connect.
+- You need a ViSiON/3 board running with `qwkAPI.enabled=true` (see the
+  [server docs](https://github.com/ViSiON-3/vision-3-bbs/blob/main/docs/sysop/messages/qwk-api.md)),
+  or flip **Settings → demo** to exercise the loop against a sample packet.
+
+Bug reports and PRs are welcome; please include device, OS version and whether
+the board uses a pinned (self-signed) or CA cert.
+
 ## Start here (contributors)
 
 Read **[docs/design/design_handoff_qwk_mobile/PHASE8-KICKOFF.md](docs/design/design_handoff_qwk_mobile/PHASE8-KICKOFF.md)**
@@ -101,3 +128,8 @@ New features follow the superpowers **brainstorming → writing-plans →
 subagent-driven-development** flow: each sub-project gets its own spec in
 `docs/superpowers/specs/` and plan in `docs/superpowers/plans/` before
 implementation. Branch per change; PRs for review.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The bundled IBM VGA font is CC BY-SA 4.0; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
