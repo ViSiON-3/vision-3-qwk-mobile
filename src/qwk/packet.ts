@@ -1,11 +1,13 @@
 /**
  * Top-level QWK packet reader: unzip -> CONTROL.DAT + HEADERS.DAT + MESSAGES.DAT
+ * (+ the optional V3AREAS.JSON sidecar)
  * -> structured model. fflate handles the zip (RN-safe, no Node zlib).
  */
 import { unzipSync } from 'fflate';
 import { parseControlDat } from './control';
 import { parseHeadersDat } from './headers';
 import { parseMessagesDat } from './messages';
+import { parseAreaIndex, AREA_INDEX_FILE } from './areaIndex';
 import { QwkPacket } from './types';
 
 /** Case-insensitive lookup of a file within an unzipped packet. */
@@ -38,7 +40,10 @@ export function readQwkPacket(zipBytes: Uint8Array): QwkPacket {
   const conferenceNames = new Map<number, string>();
   for (const c of control.conferences) conferenceNames.set(c.number, c.name);
 
-  return { control, messages, conferenceNames };
+  const indexBytes = findFile(files, AREA_INDEX_FILE);
+  const areaIndex = indexBytes ? parseAreaIndex(indexBytes) : undefined;
+
+  return { control, messages, conferenceNames, areaIndex };
 }
 
 export { unzipSync };

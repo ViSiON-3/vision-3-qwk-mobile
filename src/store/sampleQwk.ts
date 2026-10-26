@@ -1,14 +1,28 @@
-import { buildQwkPacket, QwkMessageInput } from '../qwk';
+import { buildQwkPacket, QwkMessageInput, AreaIndex } from '../qwk';
 import { PRIVATE_CONFERENCE } from './taxonomy';
 
-/** CONTROL.DAT conference directory for the sample packet. "Network: Area"
- * names exercise the server-driven taxonomy grouping; numbers match the
+/** CONTROL.DAT conference directory for the sample packet; numbers match the
  * conferences used by SAMPLE_MESSAGES below (0 = private mail). */
 const SAMPLE_CONFERENCES = [
   { number: PRIVATE_CONFERENCE, name: 'Personal' },
-  { number: 3, name: 'fsxNet: General' },
-  { number: 6, name: 'V3Net: Development' },
+  { number: 3, name: 'General' },
+  { number: 6, name: 'Development' },
 ];
+
+/** V3AREAS.JSON sidecar, as the server writes it: groups the areas under the
+ * board's real conferences and exercises the server-driven taxonomy. */
+const SAMPLE_AREA_INDEX: AreaIndex = {
+  version: 1,
+  conferences: [
+    { tag: 'FSXNET', name: 'fsxNet' },
+    { tag: 'V3NET', name: 'V3Net' },
+  ],
+  areas: [
+    { qwk: PRIVATE_CONFERENCE, tag: 'PRIVMAIL', name: 'Personal', type: 'local' },
+    { qwk: 3, tag: 'FSX_GEN', name: 'General', conference: 'FSXNET', type: 'echomail', network: 'fsxnet' },
+    { qwk: 6, tag: 'V3_DEV', name: 'Development', conference: 'V3NET', type: 'v3net' },
+  ],
+};
 
 /**
  * Sample message content used to synthesize a real .QWK packet for the offline
@@ -93,6 +107,7 @@ export function buildSampleQwk(bbsId: string): Uint8Array {
       conferences: SAMPLE_CONFERENCES,
     },
     messages: SAMPLE_MESSAGES,
+    areaIndex: SAMPLE_AREA_INDEX,
   });
 }
 

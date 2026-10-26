@@ -134,7 +134,8 @@ Notes for the client:
   invalidated by a BBS restart (in-memory) — on `401`, re-run `login`.
 - **Download**: `204` means "nothing new" (not an error). On `200`, the body is a
   standard QWK zip (CONTROL.DAT, MESSAGES.DAT, HEADERS.DAT, NNN.NDX,
-  PERSONAL.NDX, DOOR.ID). The server advances the user's newscan pointers only
+  PERSONAL.NDX, DOOR.ID) plus the ViSiON/3 sidecar `V3AREAS.JSON` (see "Area
+  index" below). The server advances the user's newscan pointers only
   after producing the packet — so a **failed/interrupted download can lose
   messages**; the client should treat a download as committed only once the bytes
   are fully received, and be prepared to not re-see them.
@@ -147,6 +148,41 @@ Notes for the client:
   full-length To/From/Subject (beyond the 25-char base limit) and a Message-ID;
   the reference field carries reply-parent numbers. The client's QWK
   parser/writer must read/preserve HEADERS.DAT and the reference field.
+
+### Area index (`V3AREAS.JSON`)
+
+CONTROL.DAT is a flat list of conference numbers and names, so it cannot say
+which areas belong to fsxNet, FidoNet or the local board. The server adds a
+small JSON entry to every packet that maps each QWK conference number to its
+message area and the board conference it belongs to (as configured in the BBS's
+`conferences.json`). The client builds the CONF tab from it. Standard QWK
+readers ignore the file; packets from older servers lack it, in which case the
+client shows every area under a single "Local" conference. **Area names are
+never parsed for structure.**
+
+```json
+{
+  "version": 1,
+  "conferences": [
+    { "tag": "FSXNET", "name": "fsxNet" },
+    { "tag": "LOCAL", "name": "Local Areas" }
+  ],
+  "areas": [
+    { "qwk": 0, "tag": "PRIVMAIL", "name": "Private Mail", "conference": "LOCAL", "type": "local" },
+    { "qwk": 5, "tag": "FSX_GEN", "name": "General", "conference": "FSXNET", "type": "echomail", "network": "fsxnet" },
+    { "qwk": 12, "tag": "LORD", "name": "LORD: Legend of the Red Dragon", "type": "echomail", "network": "fidonet" }
+  ]
+}
+```
+
+- `conferences`: board conferences with at least one exported area, in display
+  order.
+- `areas`: in CONTROL.DAT order. `qwk` is the conference number used in
+  CONTROL.DAT, the `.NDX` files and message headers. `conference` is the parent
+  conference tag, omitted for ungrouped areas (the client files those under
+  "Local"). `type` is `local`, `echomail`, `netmail`, `v3net` or `qwknet`;
+  `network` is the network key for networked areas. A conference is shown as
+  networked (NET chip) when any of its areas has a network type or key.
 
 ### Trust (TLS)
 
