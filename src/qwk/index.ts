@@ -8,7 +8,7 @@ export { parseNdx, msbinToInt } from './ndx';
 export { readQwkPacket } from './packet';
 export { writeRep } from './rep';
 export { buildQwkPacket } from './build';
-export { parseAreaIndex, serializeAreaIndex, mergeAreaIndexes, AREA_INDEX_FILE, AREA_INDEX_VERSION } from './areaIndex';
+export { parseAreaIndex, serializeAreaIndex, AREA_INDEX_FILE, AREA_INDEX_VERSION } from './areaIndex';
 export type { AreaIndex, AreaIndexArea, AreaIndexConference } from './areaIndex';
 export { parseColorText, stripColorCodes, hasColorCodes } from './colorText';
 export type { ColorSegment } from './colorText';
