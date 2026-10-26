@@ -80,12 +80,18 @@ interface ButtonProps {
 
 /** Full-width action button (gradient primary/green, outlined secondary/danger). */
 export function Button({ title, onPress, variant = 'primary', disabled, style }: ButtonProps) {
+  // Single line, always: a label that cannot fit shrinks its tracking rather
+  // than wrapping, which would push the first line to the top of the button.
   const content = (
     <Mono
       weight="bold"
       size={fontSize.button}
       spacing={letterSpacing.title}
       color={variant === 'secondary' ? colors.textPrimary : variant === 'danger' ? colors.red : '#ffffff'}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+      style={styles.buttonLabel}
     >
       {title}
     </Mono>
@@ -93,11 +99,22 @@ export function Button({ title, onPress, variant = 'primary', disabled, style }:
 
   if (variant === 'primary' || variant === 'green') {
     const grad = (variant === 'primary' ? [colors.blue, colors.blueGradEnd] : [colors.green, colors.greenAlt]) as [string, string];
+    // The caller's style (height, padding, radius) sizes the Pressable, and the
+    // gradient fills it from behind with the same corner radius — so a compact
+    // header button is actually compact, with its label padded inside the blue.
+    const radiusValue = StyleSheet.flatten([styles.button, style]).borderRadius;
     return (
-      <Pressable onPress={disabled ? undefined : onPress} style={[variant === 'primary' ? shadow.primaryButton : shadow.greenButton, style, disabled && styles.disabled]}>
-        <LinearGradient colors={grad} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.button}>
-          {content}
-        </LinearGradient>
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        style={[styles.button, variant === 'primary' ? shadow.primaryButton : shadow.greenButton, style, disabled && styles.disabled]}
+      >
+        <LinearGradient
+          colors={grad}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: radiusValue }]}
+        />
+        {content}
       </Pressable>
     );
   }
@@ -153,10 +170,12 @@ const styles = StyleSheet.create({
   rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.borderDivider },
   button: {
     height: 48,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonLabel: { textAlign: 'center' },
   buttonOutline: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
