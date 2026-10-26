@@ -6,6 +6,9 @@ It lets a BBS user log in, download a `.QWK` packet, read and reply to messages
 report. Packet-oriented by design — no live message browsing, no terminal
 scraping.
 
+Note, this does not turn ViSiON/3 BBS into a "mobile BBS" - it is simply a QWK reader implementation as a mobile app. 
+Only iOS has been tested / sideloaded.
+
 This is **Phase 8** of the ViSiON/3 QWK roadmap. Phases 0–7 (the packet engine
 and the server-side [QWK Packet API](https://github.com/ViSiON-3/vision-3-bbs/blob/main/docs/sysop/messages/qwk-api.md))
 ship in the `vision-3-bbs` repo; this repo is the mobile client that consumes
