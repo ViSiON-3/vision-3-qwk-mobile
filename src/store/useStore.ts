@@ -531,9 +531,7 @@ export function messagesForArea(messages: Message[], areaId: string): Message[] 
   return messages.filter((m) => m.areaId === areaId);
 }
 export { draftsForMessage, draftsForBoard } from './draftSelectors';
-export function privateMessages(messages: Message[]): Message[] {
-  return messages.filter((m) => m.isPrivate);
-}
+export { privateMessages, privateUnread, unreadTotal, visibleMessages } from './counts';
 export function unreadInArea(messages: Message[], areaId: string, readIds: Set<string>): number {
   return messagesForArea(messages, areaId).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
 }
@@ -545,10 +543,5 @@ export function unreadInConference(
 ): number {
   return areasForConference(areas, conferenceId).reduce((n, a) => n + unreadInArea(messages, a.id, readIds), 0);
 }
-export function privateUnread(messages: Message[], readIds: Set<string>): number {
-  return privateMessages(messages).reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
-}
-export function unreadTotal(messages: Message[], readIds: Set<string>): number {
-  return messages.reduce((n, m) => n + (readIds.has(m.id) ? 0 : 1), 0);
-}
+
 export { PRIVATE_CONFERENCE };
