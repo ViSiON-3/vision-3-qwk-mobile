@@ -34,7 +34,16 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "./plugins/withPodMinDeploymentTarget.js"
+      "./plugins/withPodMinDeploymentTarget.js",
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
