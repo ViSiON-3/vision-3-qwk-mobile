@@ -12,5 +12,8 @@ From *The Ultimate Oldschool PC Font Pack* by VileR —
 
 ## JavaScript dependencies
 
-See `package.json` / `package-lock.json`. Each package carries its own license
-in `node_modules/<package>/LICENSE` after `npm install`.
+Runtime and build dependencies are listed in `package.json` / `package-lock.json`
+and are used under their own licenses. Each package declares its license in its
+`package.json` `license` field; where a package ships a notice file, it is
+inside that package under `node_modules/` after `npm install`. To produce a
+full report: `npx license-checker --summary`.
