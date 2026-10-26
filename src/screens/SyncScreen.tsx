@@ -37,7 +37,8 @@ export function SyncScreen({ navigation }: Props) {
   const lastSyncResult = useStore((s) => s.lastSyncResult);
   const toast = useToast();
 
-  const unread = unreadTotal(messages, readIds);
+  const areas = useStore((s) => s.areas);
+  const unread = unreadTotal(messages, areas, readIds);
   const priv = privateUnread(messages, readIds);
 
   const wasSyncing = useRef(false);
