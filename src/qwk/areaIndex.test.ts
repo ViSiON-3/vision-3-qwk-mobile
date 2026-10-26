@@ -1,4 +1,4 @@
-import { parseAreaIndex, serializeAreaIndex, mergeAreaIndexes, AREA_INDEX_VERSION, AreaIndex } from './areaIndex';
+import { parseAreaIndex, serializeAreaIndex, AREA_INDEX_VERSION, AreaIndex } from './areaIndex';
 import { encodeUtf8 } from './utf8';
 
 const SAMPLE: AreaIndex = {
@@ -62,36 +62,5 @@ describe('parseAreaIndex', () => {
     expect(parseAreaIndex(encodeUtf8('[]'))).toBeUndefined();
     expect(parseAreaIndex(encodeUtf8('{"foo":1}'))).toBeUndefined();
     expect(parseAreaIndex(new Uint8Array(0))).toBeUndefined();
-  });
-});
-
-describe('mergeAreaIndexes', () => {
-  it('is undefined when no packet carried an index', () => {
-    expect(mergeAreaIndexes([undefined, undefined])).toBeUndefined();
-  });
-
-  it('lets the newest packet win and backfills entries only it lacks', () => {
-    const newest: AreaIndex = {
-      version: 1,
-      conferences: [{ tag: 'FSXNET', name: 'fsxNet (renamed)' }],
-      areas: [{ qwk: 5, tag: 'FSX_GEN', name: 'General', conference: 'FSXNET' }],
-    };
-    const older: AreaIndex = {
-      version: 1,
-      conferences: [{ tag: 'FSXNET', name: 'fsxNet' }, { tag: 'LOCAL', name: 'Local Areas' }],
-      areas: [
-        { qwk: 5, tag: 'FSX_GEN', name: 'Old name', conference: 'FSXNET' },
-        { qwk: 1, tag: 'GENERAL', name: 'General Discussion', conference: 'LOCAL' },
-      ],
-    };
-    const merged = mergeAreaIndexes([newest, undefined, older])!;
-    expect(merged.conferences).toEqual([
-      { tag: 'FSXNET', name: 'fsxNet (renamed)' },
-      { tag: 'LOCAL', name: 'Local Areas' },
-    ]);
-    expect(merged.areas.map((a) => [a.qwk, a.name])).toEqual([
-      [5, 'General'],
-      [1, 'General Discussion'],
-    ]);
   });
 });

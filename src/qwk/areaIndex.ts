@@ -111,30 +111,3 @@ export function parseAreaIndex(bytes: Uint8Array): AreaIndex | undefined {
 export function serializeAreaIndex(index: AreaIndex): Uint8Array {
   return encodeUtf8(JSON.stringify({ ...index, version: AREA_INDEX_VERSION }, null, 2));
 }
-
-/**
- * Merge indexes from several packets of the same board, newest first: the
- * first-seen conference (by tag) and area (by QWK number) win, later ones only
- * add entries the newer packets lack. Undefined when no packet carried one.
- */
-export function mergeAreaIndexes(indexes: (AreaIndex | undefined)[]): AreaIndex | undefined {
-  const present = indexes.filter((i): i is AreaIndex => !!i);
-  if (present.length === 0) return undefined;
-  const conferences: AreaIndexConference[] = [];
-  const areas: AreaIndexArea[] = [];
-  const seenConf = new Set<string>();
-  const seenQwk = new Set<number>();
-  for (const idx of present) {
-    for (const c of idx.conferences) {
-      if (seenConf.has(c.tag)) continue;
-      seenConf.add(c.tag);
-      conferences.push(c);
-    }
-    for (const a of idx.areas) {
-      if (seenQwk.has(a.qwk)) continue;
-      seenQwk.add(a.qwk);
-      areas.push(a);
-    }
-  }
-  return { version: present[0].version, conferences, areas };
-}

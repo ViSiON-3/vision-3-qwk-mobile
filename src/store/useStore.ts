@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import { Board, Conference, Draft, ImportReport, Message, Packet, Settings } from './types';
 import { mockBoards } from './mockData';
-import { buildTaxonomy, areasForConference, AreaConfig, PRIVATE_CONFERENCE } from './taxonomy';
-import { mergeAreaIndexes, AreaIndex } from '../qwk/areaIndex';
+import {
+  buildTaxonomy,
+  currentDirectory,
+  areasForConference,
+  AreaConfig,
+  PacketDirectory,
+  PRIVATE_CONFERENCE,
+} from './taxonomy';
 import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
@@ -133,32 +139,30 @@ export const useStore = create<AppState>((set, get) => {
   const activeBoardOf = (): Board | undefined => get().boards.find((b) => b.id === get().activeBoardId);
 
   /** Re-parse the active board's cached packets into state.messages and rebuild
-   * the conference/area taxonomy from the union of their CONTROL.DAT entries. */
+   * the conference/area taxonomy. The newest packet with a V3AREAS.JSON sidecar
+   * defines the current area set (see {@link currentDirectory}); without one,
+   * the union of every packet's CONTROL.DAT does. */
   const reloadMessages = async () => {
     const board = activeBoardOf();
     if (!board) return set({ messages: [], conferences: [], areas: [] });
     const boardId = board.id;
     const bbsId = board.bbsId;
     const byId = new Map<string, Message>();
-    const confByNum = new Map<number, string>(); // union of CONTROL.DAT conferences
-    const indexes: (AreaIndex | undefined)[] = []; // newest-first, like packets
+    const directories: PacketDirectory[] = []; // newest-first, like packets
     for (const p of get().packets.filter((pk) => pk.bbsId === bbsId)) {
       const bytes = await readPacketBytes(p.id);
       if (!bytes) continue;
       const { messages, qwkConferences, areaIndex } = parsePacket(bytes, bbsId);
-      indexes.push(areaIndex);
+      directories.push({ qwkConferences, areaIndex });
       // Packets are stored newest-first, so keep the first (newest) copy of each
       // stable id — an older cached packet must not clobber newer metadata.
       for (const m of messages) if (!byId.has(m.id)) byId.set(m.id, m);
-      for (const c of qwkConferences) if (!confByNum.has(c.number)) confByNum.set(c.number, c.name);
     }
     // Bail if the active board changed while we awaited reads — a stale reload
     // must not overwrite the current board's messages/taxonomy.
     if (get().activeBoardId !== boardId) return;
-    const { conferences, areas } = buildTaxonomy(
-      [...confByNum.entries()].map(([number, name]) => ({ number, name })),
-      mergeAreaIndexes(indexes)
-    );
+    const dir = currentDirectory(directories);
+    const { conferences, areas } = buildTaxonomy(dir.qwkConferences, dir.areaIndex);
     set({ messages: [...byId.values()], conferences, areas });
   };
 

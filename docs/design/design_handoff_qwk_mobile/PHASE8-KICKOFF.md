@@ -183,6 +183,12 @@ never parsed for structure.**
   `netmail`, `v3net` or `qwknet`; `network` is the network key for networked
   areas, and `networkName` an optional display name for it. A conference is
   shown as networked (NET chip) when any of its areas has a network type or key.
+- A packet lists exactly the areas the user is tagged for on the server, so the
+  client treats the **newest cached packet with a sidecar as the full current
+  area set** for that board. Areas known only from older packets (untagged
+  since, or pre-sidecar packets) drop out of the CONF view; their cached
+  messages stay and reappear if the area is tagged again. A `204` (no new
+  mail) carries no packet and never changes the area set.
 - Ungrouped areas: the client groups them by `network` (one conference per
   network, named from `networkName` or the key), and puts ungrouped areas with
   no network under "Other Areas". So a board that never assigned its echomail

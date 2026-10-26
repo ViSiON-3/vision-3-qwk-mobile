@@ -7,6 +7,7 @@ import {
   UNGROUPED_CONFERENCE_NAME,
   FLAT_CONFERENCE_NAME,
   networkDisplayName,
+  currentDirectory,
 } from './taxonomy';
 import type { AreaIndex } from '../qwk/areaIndex';
 
@@ -166,5 +167,54 @@ describe('networkDisplayName', () => {
     expect(networkDisplayName('araknet')).toBe('ArakNet');
     expect(networkDisplayName('agora')).toBe('Agora');
     expect(networkDisplayName('fsxnet', 'Custom')).toBe('Custom');
+  });
+});
+
+describe('currentDirectory (which areas the board currently has)', () => {
+  const idx = (tags: Record<number, string>, conference = 'LOCAL'): AreaIndex => ({
+    version: 1,
+    conferences: [{ tag: 'LOCAL', name: 'Local Areas' }],
+    areas: Object.entries(tags).map(([qwk, tag]) => ({ qwk: Number(qwk), tag, name: tag, conference })),
+  });
+  const ctl = (...nums: number[]) => nums.map((n) => ({ number: n, name: `Area ${n}` }));
+
+  it('treats the newest sidecar as the full subscription set: areas only in older packets are dropped', () => {
+    const newest = { qwkConferences: ctl(0, 1, 2, 3), areaIndex: idx({ 1: 'A', 2: 'B', 3: 'C' }) };
+    const olderWithIndex = { qwkConferences: ctl(0, 1, 4), areaIndex: idx({ 1: 'A', 4: 'D' }) };
+    const olderNoIndex = { qwkConferences: ctl(0, 5) }; // pre-sidecar packet
+    const dir = currentDirectory([newest, olderWithIndex, olderNoIndex]);
+    expect(dir.qwkConferences.map((c) => c.number)).toEqual([0, 1, 2, 3]);
+    expect(dir.areaIndex).toBe(newest.areaIndex);
+
+    const { conferences, areas } = buildTaxonomy(dir.qwkConferences, dir.areaIndex);
+    expect(areas.map((a) => a.qwkConference)).toEqual([1, 2, 3]);
+    expect(conferences.map((c) => c.name)).toEqual(['Local Areas']); // no "Other Areas" for D/E
+  });
+
+  it('uses the newest packet that has a sidecar even if a newer one lacks it', () => {
+    const newestNoIndex = { qwkConferences: ctl(0, 9) };
+    const withIndex = { qwkConferences: ctl(0, 1), areaIndex: idx({ 1: 'A' }) };
+    const dir = currentDirectory([newestNoIndex, withIndex]);
+    expect(dir.qwkConferences.map((c) => c.number)).toEqual([0, 1]);
+    expect(dir.areaIndex).toBe(withIndex.areaIndex);
+  });
+
+  it('keeps the first-seen (newest) CONTROL.DAT name for a surviving area', () => {
+    const dir = currentDirectory([
+      { qwkConferences: [{ number: 1, name: 'New name' }], areaIndex: idx({ 1: 'A' }) },
+      { qwkConferences: [{ number: 1, name: 'Old name' }] },
+    ]);
+    expect(dir.qwkConferences).toEqual([{ number: 1, name: 'New name' }]);
+  });
+
+  it('without any sidecar, unions every packet (older servers, other BBS software)', () => {
+    const dir = currentDirectory([{ qwkConferences: ctl(0, 1) }, { qwkConferences: ctl(0, 4, 5) }]);
+    expect(dir.qwkConferences.map((c) => c.number)).toEqual([0, 1, 4, 5]);
+    expect(dir.areaIndex).toBeUndefined();
+    expect(buildTaxonomy(dir.qwkConferences).conferences.map((c) => c.name)).toEqual([FLAT_CONFERENCE_NAME]);
+  });
+
+  it('is empty when there are no cached packets', () => {
+    expect(currentDirectory([])).toEqual({ qwkConferences: [] });
   });
 });

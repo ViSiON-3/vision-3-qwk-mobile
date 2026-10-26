@@ -146,6 +146,39 @@ export function buildTaxonomy(
   return { conferences, areas };
 }
 
+/** The conference directory parsed from one cached packet. */
+export interface PacketDirectory {
+  qwkConferences: { number: number; name: string }[];
+  areaIndex?: AreaIndex;
+}
+
+/**
+ * Decide which areas the board currently has, from the cached packets of one
+ * board (newest first). A packet's V3AREAS.JSON lists exactly the areas the user
+ * is subscribed to on the server, so the newest packet that carries one is
+ * authoritative: areas known only from older packets (areas since untagged, or
+ * packets from before the server wrote the sidecar) are dropped rather than
+ * shown ungrouped. Their messages stay cached and reappear if the area comes
+ * back. With no sidecar anywhere (older servers, other BBS software) the
+ * directory is the union of every packet's CONTROL.DAT, as before.
+ */
+export function currentDirectory(packets: PacketDirectory[]): PacketDirectory {
+  const union = new Map<number, string>(); // first-seen (newest) name per number
+  for (const p of packets) {
+    for (const c of p.qwkConferences) if (!union.has(c.number)) union.set(c.number, c.name);
+  }
+  const all = [...union.entries()].map(([number, name]) => ({ number, name }));
+
+  const current = packets.find((p) => p.areaIndex)?.areaIndex;
+  if (!current) return { qwkConferences: all };
+
+  const live = new Set(current.areas.map((a) => a.qwk));
+  return {
+    qwkConferences: all.filter((c) => c.number === PRIVATE_CONFERENCE || live.has(c.number)),
+    areaIndex: current,
+  };
+}
+
 export function areaByQwkConference(areas: AreaConfig[], conf: number): AreaConfig | undefined {
   return areas.find((a) => a.qwkConference === conf);
 }
