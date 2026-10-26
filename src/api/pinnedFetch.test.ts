@@ -21,7 +21,7 @@ describe('probeServerFingerprint', () => {
 
   it('throws PinningUnavailableError when there is no native module', async () => {
     jest.spyOn(native, 'getNativeQwkTls').mockReturnValue(null);
-    await expect(probeServerFingerprint('192.168.1.219', 8666)).rejects.toBeInstanceOf(PinningUnavailableError);
+    await expect(probeServerFingerprint('192.0.2.10', 8666)).rejects.toBeInstanceOf(PinningUnavailableError);
   });
 
   it('normalizes the native fingerprint (strips separators, up-cases)', async () => {
