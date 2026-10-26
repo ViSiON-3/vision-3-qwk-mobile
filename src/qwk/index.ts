@@ -10,6 +10,8 @@ export { writeRep } from './rep';
 export { buildQwkPacket } from './build';
 export { parseAreaIndex, serializeAreaIndex, mergeAreaIndexes, AREA_INDEX_FILE, AREA_INDEX_VERSION } from './areaIndex';
 export type { AreaIndex, AreaIndexArea, AreaIndexConference } from './areaIndex';
+export { parseColorText, stripColorCodes, hasColorCodes } from './colorText';
+export type { ColorSegment } from './colorText';
 export type { QwkMessageInput, QwkControlInput } from './build';
 export type { HeaderSection } from './headers';
 export type { ParseMessagesOptions } from './messages';
