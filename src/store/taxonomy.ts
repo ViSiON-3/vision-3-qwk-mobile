@@ -9,19 +9,40 @@ import type { AreaIndex } from '../qwk/areaIndex';
  * parsed messages map to an area purely by their conference number. Areas are
  * grouped into UI Conferences using the server's V3AREAS.JSON sidecar, which
  * names each area's parent board conference (fsxNet, FidoNet, Local Areas…)
- * exactly as the sysop configured it. Areas the sidecar leaves ungrouped — and
- * every area in a packet from an older server with no sidecar — fall under a
- * single "Local" conference. Area names are never parsed for structure.
- * Conference 0 is private email (the MAIL tab) and is excluded from the public
- * taxonomy.
+ * exactly as the sysop configured it. Areas the sidecar leaves ungrouped are
+ * grouped by their message network instead (fsxNet, FidoNet…), and those with
+ * no network at all land in "Other Areas". Every area in a packet from an older
+ * server with no sidecar falls under a single "All Areas" conference. Area
+ * names are never parsed for structure. Conference 0 is private email (the
+ * MAIL tab) and is excluded from the public taxonomy.
  */
 
 export const PRIVATE_AREA_ID = 'mail';
 export const PRIVATE_CONFERENCE = 0;
 
-/** Name/tag of the group holding areas with no board conference. */
-export const UNGROUPED_CONFERENCE_NAME = 'Local';
-export const UNGROUPED_CONFERENCE_TAG = 'LOCAL';
+/** Group for areas with no board conference and no network (sidecar present). */
+export const UNGROUPED_CONFERENCE_NAME = 'Other Areas';
+export const UNGROUPED_CONFERENCE_TAG = 'OTHER';
+/** Single group for every area when the packet has no sidecar (older server). */
+export const FLAT_CONFERENCE_NAME = 'All Areas';
+export const FLAT_CONFERENCE_TAG = 'ALL';
+
+/** Display casing for well-known network keys; anything else gets a generic
+ * "FooNet" treatment. Purely cosmetic — the key itself is the grouping. */
+const NETWORK_DISPLAY_NAMES: Record<string, string> = {
+  fsxnet: 'fsxNet',
+  fidonet: 'FidoNet',
+  dovenet: 'DOVE-Net',
+  v3net: 'V3Net',
+};
+
+export function networkDisplayName(key: string, provided?: string): string {
+  if (provided) return provided;
+  const k = key.trim().toLowerCase();
+  if (NETWORK_DISPLAY_NAMES[k]) return NETWORK_DISPLAY_NAMES[k];
+  if (k.endsWith('net') && k.length > 3) return k[0].toUpperCase() + k.slice(1, -3) + 'Net';
+  return k ? k[0].toUpperCase() + k.slice(1) : key;
+}
 
 /** Area types the BBS uses for areas fed by a message network. */
 const NET_AREA_TYPES = new Set(['echomail', 'netmail', 'v3net', 'qwknet']);
@@ -49,9 +70,10 @@ interface Group {
  * Build the UI conference/area taxonomy from a packet's CONTROL.DAT conference
  * list plus the optional V3AREAS.JSON index. Conference 0 (private mail) is
  * skipped; every other CONTROL.DAT entry becomes an area (duplicate numbers keep
- * their first-seen name). Conferences appear in the board's display order, only
- * when they hold at least one exported area, with the ungrouped "Local" bucket
- * last. Deterministic given the inputs.
+ * their first-seen name). Order: board conferences in display order (only those
+ * holding an exported area), then one group per network for areas the board
+ * left ungrouped (first-seen order), then "Other Areas" for the rest.
+ * Deterministic given the inputs.
  */
 export function buildTaxonomy(
   qwkConferences: { number: number; name: string }[],
@@ -66,10 +88,10 @@ export function buildTaxonomy(
       areas: [],
     });
   }
-  const ungrouped: Group = {
-    conf: { id: '', number: 0, name: UNGROUPED_CONFERENCE_NAME, tag: UNGROUPED_CONFERENCE_TAG, isNet: false },
-    areas: [],
-  };
+  const netGroups = new Map<string, Group>(); // lower-cased network key -> group
+  const ungrouped: Group = areaIndex
+    ? { conf: { id: '', number: 0, name: UNGROUPED_CONFERENCE_NAME, tag: UNGROUPED_CONFERENCE_TAG, isNet: false }, areas: [] }
+    : { conf: { id: '', number: 0, name: FLAT_CONFERENCE_NAME, tag: FLAT_CONFERENCE_TAG, isNet: false }, areas: [] };
 
   const seen = new Set<number>();
   for (const qc of qwkConferences) {
@@ -77,7 +99,25 @@ export function buildTaxonomy(
     seen.add(qc.number);
 
     const meta = indexAreas.get(qc.number);
-    const group = (meta?.conference && groups.get(meta.conference)) || ungrouped;
+    let group = meta?.conference ? groups.get(meta.conference) : undefined;
+    if (!group && meta?.network) {
+      const key = meta.network.trim().toLowerCase();
+      group = netGroups.get(key);
+      if (!group) {
+        group = {
+          conf: {
+            id: '',
+            number: 0,
+            name: networkDisplayName(key, meta.networkName),
+            tag: slug(key) || 'NET',
+            isNet: true,
+          },
+          areas: [],
+        };
+        netGroups.set(key, group);
+      }
+    }
+    if (!group) group = ungrouped;
     const name = (meta?.name || qc.name).trim() || `Conference ${qc.number}`;
     const tag = (meta?.tag && slug(meta.tag)) || slug(name) || `CONF${qc.number}`;
     if (group !== ungrouped && meta && ((meta.type && NET_AREA_TYPES.has(meta.type)) || meta.network)) {
@@ -95,7 +135,7 @@ export function buildTaxonomy(
 
   const conferences: Conference[] = [];
   const areas: AreaConfig[] = [];
-  for (const g of [...groups.values(), ungrouped]) {
+  for (const g of [...groups.values(), ...netGroups.values(), ungrouped]) {
     if (g.areas.length === 0) continue;
     const id = `c${conferences.length}`;
     g.conf.id = id;

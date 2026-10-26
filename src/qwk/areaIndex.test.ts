@@ -34,6 +34,7 @@ describe('parseAreaIndex', () => {
       conference: undefined,
       type: 'echomail',
       network: 'fidonet',
+      networkName: undefined,
     });
   });
 
