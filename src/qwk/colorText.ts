@@ -11,6 +11,23 @@
  * moves, clears) are dropped.
  */
 
+/**
+ * Terminal attribute state. `bold` is tracked separately from the selected
+ * colour, as a real terminal does: SGR 1 brightens whatever base colour is
+ * current, SGR 30–37 pick a base colour without touching bold, and SGR 90–97
+ * pick a bright colour directly. The effective foreground is base | 8 when
+ * bold is on.
+ */
+interface Attr {
+  base: number; // 0–15 selected foreground (90–97 and |08–|15 land in 8–15)
+  bold: boolean;
+  bg: number;
+}
+
+function effectiveFg(a: Attr): number {
+  return a.bold ? a.base | 8 : a.base;
+}
+
 /** One run of text with a CGA/VGA 16-colour attribute. */
 export interface ColorSegment {
   text: string;
@@ -39,22 +56,21 @@ const CSI = /^\[([0-9;?]*)([@-~])/;
 /** Parse a body into colour segments. Adjacent runs with equal attributes are merged. */
 export function parseColorText(text: string): ColorSegment[] {
   const out: ColorSegment[] = [];
-  let fg = DEFAULT_FG;
-  let bg = DEFAULT_BG;
+  let attr: Attr = { base: DEFAULT_FG, bold: false, bg: DEFAULT_BG };
   let buf = '';
 
   const flush = () => {
     if (buf.length === 0) return;
+    const fg = effectiveFg(attr);
     const last = out[out.length - 1];
-    if (last && last.fg === fg && last.bg === bg) last.text += buf;
-    else out.push({ text: buf, fg, bg });
+    if (last && last.fg === fg && last.bg === attr.bg) last.text += buf;
+    else out.push({ text: buf, fg, bg: attr.bg });
     buf = '';
   };
-  const setAttr = (nextFg: number, nextBg: number) => {
-    if (nextFg === fg && nextBg === bg) return;
+  const setAttr = (next: Attr) => {
+    if (next.base === attr.base && next.bold === attr.bold && next.bg === attr.bg) return;
     flush();
-    fg = nextFg;
-    bg = nextBg;
+    attr = next;
   };
 
   let i = 0;
@@ -66,8 +82,7 @@ export function parseColorText(text: string): ColorSegment[] {
       const m = CSI.exec(text.slice(i + 1, i + 40));
       if (m) {
         if (m[2] === 'm') {
-          const next = applySgr(m[1], fg, bg);
-          setAttr(next.fg, next.bg);
+          setAttr(applySgr(m[1], attr));
         }
         // Any other CSI (cursor movement, erase…) is dropped.
         i += 1 + m[0].length;
@@ -90,18 +105,21 @@ export function parseColorText(text: string): ColorSegment[] {
       }
       const bgm = PIPE_BG.exec(rest);
       if (bgm) {
-        setAttr(fg, Number(bgm[1]));
+        setAttr({ ...attr, bg: Number(bgm[1]) });
         i += bgm[0].length;
         continue;
       }
       const fgm = PIPE_FG.exec(rest);
       if (fgm) {
-        setAttr(Number(fgm[1]), bg);
+        // Mirrors the server's expansion: |00–|07 -> ESC[0;3Xm (full reset,
+        // so the background clears too); |08–|15 -> ESC[1;3Xm (bold on).
+        const n = Number(fgm[1]);
+        setAttr(n < 8 ? { base: n, bold: false, bg: DEFAULT_BG } : { ...attr, base: n - 8, bold: true });
         i += 3;
         continue;
       }
       if (rest.startsWith('|23')) {
-        setAttr(DEFAULT_FG, DEFAULT_BG);
+        setAttr({ base: DEFAULT_FG, bold: false, bg: DEFAULT_BG });
         i += 3;
         continue;
       }
@@ -138,42 +156,54 @@ function xterm16ToCga(n: number): number {
 }
 
 /** Apply an SGR parameter list to the current attributes. */
-function applySgr(params: string, fg: number, bg: number): { fg: number; bg: number } {
+function applySgr(params: string, cur: Attr): Attr {
   const codes = params === '' ? [0] : params.split(';').map((p) => (p === '' ? 0 : Number(p)));
+  let { base, bold, bg } = cur;
   for (let k = 0; k < codes.length; k++) {
     const c = codes[k];
     if (Number.isNaN(c)) continue;
     if (c === 0) {
-      fg = DEFAULT_FG;
+      base = DEFAULT_FG;
+      bold = false;
       bg = DEFAULT_BG;
     } else if (c === 1) {
-      fg |= 8; // bold = bright foreground on a CGA terminal
+      bold = true; // bold = bright foreground on a CGA terminal
     } else if (c === 2 || c === 22) {
-      fg &= 7;
+      bold = false;
     } else if (c >= 30 && c <= 37) {
-      fg = (fg & 8) | ANSI_TO_CGA[c - 30];
+      base = ANSI_TO_CGA[c - 30];
     } else if (c === 39) {
-      fg = DEFAULT_FG;
+      base = DEFAULT_FG;
     } else if (c >= 90 && c <= 97) {
-      fg = 8 + ANSI_TO_CGA[c - 90];
+      base = 8 + ANSI_TO_CGA[c - 90];
     } else if (c >= 40 && c <= 47) {
       bg = ANSI_TO_CGA[c - 40];
     } else if (c === 49) {
       bg = DEFAULT_BG;
     } else if (c >= 100 && c <= 107) {
       bg = 8 + ANSI_TO_CGA[c - 100];
-    } else if ((c === 38 || c === 48) && codes[k + 1] === 5) {
-      // 256-colour form: only the first 16 have a CGA equivalent.
-      const n = codes[k + 2];
-      if (n !== undefined && n >= 0 && n <= 15) {
-        if (c === 38) fg = xterm16ToCga(n);
-        else bg = xterm16ToCga(n);
+    } else if (c === 38 || c === 48) {
+      // Extended colour: consume the whole group so its components are never
+      // read as unrelated SGR commands (a zero inside "38;2;255;0;0" must not
+      // act as a reset). Only the first 16 of the 256-colour form map to CGA;
+      // true colour is skipped.
+      const mode = codes[k + 1];
+      if (mode === 5) {
+        const n = codes[k + 2];
+        if (n !== undefined && n >= 0 && n <= 15) {
+          if (c === 38) base = xterm16ToCga(n);
+          else bg = xterm16ToCga(n);
+        }
+        k += 2;
+      } else if (mode === 2) {
+        k += 4;
+      } else {
+        k += 1;
       }
-      k += 2;
     }
     // Other attributes (blink, reverse, underline…) are ignored.
   }
-  return { fg, bg };
+  return { base, bold, bg };
 }
 
 /** The body with every colour/control code removed (previews, quoting, search). */
