@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
-import { Screen, Mono, Vga, Card, Button, Chip } from '../components';
+import { Screen, Mono, Vga, Card, Button, Chip, ColorText } from '../components';
 import { RootStackParamList } from '../navigation/types';
 import { useStore, messagesForArea, draftsForMessage } from '../store/useStore';
 import { PRIVATE_CONFERENCE } from '../store/useStore';
@@ -104,9 +104,7 @@ export function ReaderScreen({ navigation, route }: Props) {
         <Field name="Area" value={area?.tag ?? ''} />
       </Card>
 
-      <Vga size={fontSize.body} color={colors.textBody} style={styles.body}>
-        {msg.body}
-      </Vga>
+      <ColorText text={msg.body} size={fontSize.body} style={styles.body} />
 
       {savedReplies.length > 0 && (
         <Card style={styles.saved}>

@@ -1,5 +1,6 @@
 import type { AreaIndex } from '../qwk/areaIndex';
 import { readQwkPacket } from '../qwk';
+import { stripColorCodes } from '../qwk/colorText';
 import { Message } from './types';
 import { PRIVATE_AREA_ID, PRIVATE_CONFERENCE, areaIdForConference } from './taxonomy';
 
@@ -9,8 +10,9 @@ export function stableMessageId(bbsId: string, conference: number, number: numbe
 }
 
 function preview(body: string): string {
-  // Prefer the first line with actual words (skip CP437 box-art / rule lines).
-  const lines = body.split('\n').map((s) => s.trim());
+  // Prefer the first line with actual words (skip CP437 box-art / rule lines),
+  // with colour/control codes removed so they never leak into the list.
+  const lines = stripColorCodes(body).split('\n').map((s) => s.trim());
   const line = lines.find((s) => /[A-Za-z0-9]/.test(s)) ?? lines.find((s) => s.length > 0) ?? '';
   return line.length > 80 ? line.slice(0, 80) + '…' : line;
 }

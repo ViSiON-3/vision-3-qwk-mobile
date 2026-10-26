@@ -1,4 +1,5 @@
 import { wrapText } from './wrap';
+import { stripColorCodes } from './colorText';
 
 /**
  * Quote-prefix initials for `author`. Multi-token names use the first letter of
@@ -34,6 +35,8 @@ function attributionLine(author: string): string {
  */
 export function buildQuote(parentBody: string, parentAuthor: string): string {
   const prefix = `${initialsFor(parentAuthor)}> `;
-  const quoted = wrapText(parentBody, 79, prefix);
+  // Quote the words, not the colour codes: a reply must not re-emit the
+  // parent's ANSI/pipe markup inside "> " lines.
+  const quoted = wrapText(stripColorCodes(parentBody), 79, prefix);
   return `${attributionLine(parentAuthor)}\n${quoted}`;
 }
