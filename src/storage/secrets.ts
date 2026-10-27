@@ -1,8 +1,9 @@
 /**
- * Per-board credential storage in the OS keychain (expo-secure-store). Board
- * passwords are kept here, NOT in the AsyncStorage snapshot (which is plaintext
- * and lands in device backups). Degrades to a safe no-op / '' when the native
- * module is unavailable (tests / a build without it).
+ * Keychain (expo-secure-store) housekeeping. Earlier builds kept each board's
+ * password here; with device pairing (issue #24) the app never holds a
+ * password, so the only job left is to purge those legacy entries on startup.
+ * Degrades to a safe no-op when the native module is unavailable (tests / a
+ * build without it).
  */
 let mod: typeof import('expo-secure-store') | null | undefined;
 
@@ -19,38 +20,15 @@ function store(): typeof import('expo-secure-store') | null {
   return mod ?? null;
 }
 
-// SecureStore keys allow [A-Za-z0-9._-]; board ids are base36+prefix, sanitize anyway.
-const passKey = (boardId: string) => `v3qwk_pass_${boardId.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+// The key format the pre-pairing builds used; kept only so it can be deleted.
+const legacyPassKey = (boardId: string) => `v3qwk_pass_${boardId.replace(/[^A-Za-z0-9._-]/g, '_')}`;
 
-/** Store (or clear, when blank) a board's password in the keychain. */
-export async function setBoardPassword(boardId: string, pass: string): Promise<void> {
+/** Remove a board's password left by a pre-pairing build (best-effort). */
+export async function purgeLegacyBoardPassword(boardId: string): Promise<void> {
   const s = store();
   if (!s) return;
   try {
-    if (pass) await s.setItemAsync(passKey(boardId), pass);
-    else await s.deleteItemAsync(passKey(boardId));
-  } catch (e) {
-    console.warn('secrets: failed to store board password', e);
-  }
-}
-
-/** Read a board's password from the keychain ('' if absent/unavailable). */
-export async function getBoardPassword(boardId: string): Promise<string> {
-  const s = store();
-  if (!s) return '';
-  try {
-    return (await s.getItemAsync(passKey(boardId))) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-/** Remove a board's stored password (best-effort). */
-export async function deleteBoardPassword(boardId: string): Promise<void> {
-  const s = store();
-  if (!s) return;
-  try {
-    await s.deleteItemAsync(passKey(boardId));
+    await s.deleteItemAsync(legacyPassKey(boardId));
   } catch {
     /* ignore */
   }

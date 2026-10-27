@@ -1,12 +1,27 @@
 /** UI-facing view models for the app shell (mock-backed for now). */
 
+/** What pairing left behind. No secret here — the private key that makes these
+ * ids useful lives in the Secure Enclave / Keystore under the board's alias. */
+export interface BoardPairing {
+  /** Server-issued id of this phone's registered key. */
+  deviceId: string;
+  /** The server's board identity, bound into every signed login message. */
+  boardId: string;
+  /** Name registered with the server (shown in its device list). */
+  deviceName: string;
+  /** ISO timestamp. */
+  pairedAt: string;
+}
+
 export interface Board {
   id: string;
   name: string;
   host: string;
   port: number;
   handle: string;
-  pass: string;
+  /** Set once this phone has paired with the board. The password is never kept:
+   * it is typed once to pair and discarded (see store.connect). */
+  pairing?: BoardPairing;
   /** Derived BBS id (uppercased alnum, <=8) or server-provided. */
   bbsId: string;
   /** Pinned server TLS cert SHA-256 (bare hex). Empty/undefined = no pinning. */

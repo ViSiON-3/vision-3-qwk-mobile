@@ -122,7 +122,7 @@ export function createQwkClient(config: QwkClientConfig): QwkClient {
         body: JSON.stringify({ handle, password }),
       });
       if (res.status === 200) return (await res.json()) as LoginResult;
-      if (res.status === 401) throw new QwkAuthError('Invalid handle or password');
+      if (res.status === 401) throw new QwkAuthError('Login failed — check handle and password.');
       throw await toApiError(res);
     },
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Board, Conference, Draft, ImportReport, Message, Packet, Settings } from './types';
+import { Board, BoardPairing, Conference, Draft, ImportReport, Message, Packet, Settings } from './types';
 import { mockBoards } from './mockData';
 import {
   buildTaxonomy,
@@ -13,9 +13,9 @@ import { buildSampleQwk } from './sampleQwk';
 import { parsePacket } from './viewModel';
 import { buildRepFromDrafts } from './repBuilder';
 import { currentTagline } from './appTagline';
-import { makeSession, pushDrafts, describeSyncError } from './net';
+import { makeClient, makeSession, boardSigner, pushDrafts, describeSyncError, needsRepair } from './net';
 import { draftsForBoard, migrateDraftBoardIds } from './draftSelectors';
-import { QwkSession, DownloadToFileResult } from '../api';
+import { QwkSession, DownloadToFileResult, pairDevice } from '../api';
 import { readQwkPacket } from '../qwk';
 import {
   writePacketBytes,
@@ -25,7 +25,8 @@ import {
   packetFilePath,
 } from '../storage/packetCache';
 import { loadPersistedState, savePersistedState, PersistedState } from '../storage/persistence';
-import { getBoardPassword, setBoardPassword, deleteBoardPassword } from '../storage/secrets';
+import { purgeLegacyBoardPassword } from '../storage/secrets';
+import { defaultDeviceName } from '../utils/defaultDeviceName';
 
 let idSeq = 0;
 const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(++idSeq).toString(36)}`;
@@ -49,6 +50,18 @@ const DEFAULT_SETTINGS: Settings = { platform: 'ios', scanlines: true, glow: tru
  */
 let activeSession: QwkSession | null = null;
 
+/** Drop the live session, telling the server (best-effort) so the token dies now. */
+function endSession() {
+  const s = activeSession;
+  activeSession = null;
+  void s?.logout();
+}
+
+/** The live session, for screens that talk to the API directly (Devices). */
+export function getActiveSession(): QwkSession | null {
+  return activeSession;
+}
+
 export interface AppState {
   hydrated: boolean;
 
@@ -57,6 +70,8 @@ export interface AppState {
 
   loggedIn: boolean;
   connecting: boolean;
+  /** True during the pair step of connect (password login + key registration). */
+  pairing: boolean;
   /** Last connect/sync/upload failure, user-facing; null when clear. */
   error: string | null;
 
@@ -90,16 +105,26 @@ export interface AppState {
   hydrate: () => Promise<void>;
 
   // session
-  connect: () => void;
+  /**
+   * Dial in. A paired board logs in with its device key. An unpaired board
+   * needs the password once: it pairs this phone (registering a fresh hardware
+   * key), then logs in. The password is used for that one request and dropped.
+   */
+  connect: (password?: string) => void;
   disconnect: () => void;
+  /** Forget a board's pairing + device key (after unpairing it on the server,
+   * or to force a re-pair). Logs out if it is the active board. */
+  forgetPairing: (boardId: string) => Promise<void>;
   syncNow: () => void;
   markRead: (id: string) => void;
   clearError: () => void;
 
   // boards
   selectBoard: (id: string) => { disconnected: boolean };
-  addBoard: (input: Omit<Board, 'id' | 'bbsId'>) => void;
-  updateBoard: (id: string, input: Omit<Board, 'id' | 'bbsId'>) => void;
+  addBoard: (input: Omit<Board, 'id' | 'bbsId' | 'pairing'>) => void;
+  /** Edit a board. Changing host, port or handle drops its pairing: the key was
+   * registered for one account on one server. Returns whether it was dropped. */
+  updateBoard: (id: string, input: Omit<Board, 'id' | 'bbsId' | 'pairing'>) => { unpaired: boolean };
   deleteBoard: (id: string) => boolean;
 
   // outbox
@@ -122,9 +147,7 @@ export interface AppState {
 
 function snapshot(s: AppState): PersistedState {
   return {
-    // Strip passwords — they live in the keychain (secrets.ts), never in the
-    // plaintext AsyncStorage snapshot.
-    boards: s.boards.map(({ pass: _pass, ...b }) => b),
+    boards: s.boards,
     activeBoardId: s.activeBoardId,
     settings: s.settings,
     drafts: s.drafts,
@@ -137,6 +160,32 @@ export const useStore = create<AppState>((set, get) => {
   const persist = () => void savePersistedState(snapshot(get()));
 
   const activeBoardOf = (): Board | undefined => get().boards.find((b) => b.id === get().activeBoardId);
+
+  const setPairing = (boardId: string, pairing: BoardPairing | undefined) =>
+    set((s) => ({ boards: s.boards.map((b) => (b.id === boardId ? { ...b, pairing } : b)) }));
+
+  /** Drop a board's pairing and its hardware key. */
+  const dropPairing = async (board: Board) => {
+    setPairing(board.id, undefined);
+    persist();
+    await boardSigner(board).delete();
+  };
+
+  /**
+   * Shared failure path for connect/sync/upload. An error that says "this
+   * phone must pair again" (unpaired on the server, password changed, key gone)
+   * drops the pairing and the session, so Connect asks for the password.
+   */
+  const failWith = (board: Board, e: unknown, extra: Partial<AppState> = {}) => {
+    const message = describeSyncError(e);
+    if (needsRepair(e)) {
+      endSession();
+      void dropPairing(board);
+      set({ loggedIn: false, error: message, ...extra });
+      return;
+    }
+    set({ error: message, ...extra });
+  };
 
   /** Re-parse the active board's cached packets into state.messages and rebuild
    * the conference/area taxonomy. The newest packet with a V3AREAS.JSON sidecar
@@ -199,6 +248,7 @@ export const useStore = create<AppState>((set, get) => {
 
     loggedIn: false,
     connecting: false,
+    pairing: false,
     error: null,
 
     syncing: false,
@@ -221,11 +271,10 @@ export const useStore = create<AppState>((set, get) => {
     hydrate: async () => {
       const persisted = await loadPersistedState();
       if (persisted) {
-        // Board metadata comes from AsyncStorage; passwords from the keychain.
-        const base = persisted.boards.length ? persisted.boards : mockBoards;
-        const boards: Board[] = await Promise.all(
-          base.map(async (b) => ({ ...b, pass: await getBoardPassword(b.id) }))
-        );
+        const boards: Board[] = persisted.boards.length ? persisted.boards : mockBoards;
+        // Pre-pairing builds kept each board's password in the keychain. The app
+        // never uses a stored password any more — remove them.
+        for (const b of boards) void purgeLegacyBoardPassword(b.id);
         const activeBoardId = persisted.activeBoardId || mockBoards[0].id;
         set({
           boards,
@@ -252,7 +301,7 @@ export const useStore = create<AppState>((set, get) => {
       set({ hydrated: true });
     },
 
-    connect: async () => {
+    connect: async (password) => {
       const board = activeBoardOf();
       if (!board) return;
       set({ connecting: true, error: null });
@@ -261,17 +310,43 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
       try {
-        activeSession = makeSession(board);
+        let pairing = board.pairing;
+        if (!pairing) {
+          if (!board.handle.trim()) throw new Error('Enter a handle for this board first (Boards › edit).');
+          if (!password) throw new Error('Enter your password to pair this phone.');
+          set({ pairing: true });
+          const deviceName = defaultDeviceName();
+          const result = await pairDevice(makeClient(board), {
+            handle: board.handle,
+            password,
+            deviceName,
+            signer: boardSigner(board),
+          });
+          pairing = { ...result, deviceName, pairedAt: new Date().toISOString() };
+          setPairing(board.id, pairing);
+          set({ pairing: false });
+          persist();
+        }
+        activeSession = makeSession({ ...board, pairing });
         await activeSession.login();
         set({ connecting: false, loggedIn: true });
       } catch (e) {
         activeSession = null;
-        set({ connecting: false, loggedIn: false, error: describeSyncError(e) });
+        failWith(board, e, { connecting: false, pairing: false, loggedIn: false });
       }
     },
     disconnect: () => {
-      activeSession = null;
-      set({ loggedIn: false, connecting: false, error: null });
+      endSession();
+      set({ loggedIn: false, connecting: false, pairing: false, error: null });
+    },
+    forgetPairing: async (boardId) => {
+      const board = get().boards.find((b) => b.id === boardId);
+      if (!board) return;
+      if (boardId === get().activeBoardId) {
+        endSession();
+        set({ loggedIn: false, error: null });
+      }
+      await dropPairing(board);
     },
 
     syncNow: async () => {
@@ -377,7 +452,7 @@ export const useStore = create<AppState>((set, get) => {
         set({ syncing: false, lastSyncResult: 'packet' });
         persist();
       } catch (e) {
-        set({ syncing: false, downloadProgress: null, error: describeSyncError(e) });
+        failWith(board, e, { syncing: false, downloadProgress: null });
       }
     },
 
@@ -394,7 +469,7 @@ export const useStore = create<AppState>((set, get) => {
       const state = get();
       const changed = id !== state.activeBoardId;
       const wasLoggedIn = state.loggedIn && changed;
-      if (changed) activeSession = null; // creds differ per board
+      if (changed) endSession(); // each board has its own pairing + session
       set({ activeBoardId: id, ...(wasLoggedIn ? { loggedIn: false } : {}), ...(changed ? { error: null } : {}) });
       persist();
       void reloadMessages().then(() => {
@@ -408,16 +483,32 @@ export const useStore = create<AppState>((set, get) => {
     addBoard: (input) => {
       const id = nextId('b');
       set((s) => ({ boards: [...s.boards, { ...input, id, bbsId: deriveBbsId(input.name) }] }));
-      void setBoardPassword(id, input.pass); // keychain, not the persisted snapshot
       persist();
     },
 
     updateBoard: (id, input) => {
+      const existing = get().boards.find((b) => b.id === id);
+      // The device key is registered with one account on one server; a change
+      // of server or handle would otherwise keep logging in as the old pairing.
+      const unpaired =
+        !!existing?.pairing &&
+        (existing.host !== input.host ||
+          existing.port !== input.port ||
+          existing.handle.trim().toLowerCase() !== input.handle.trim().toLowerCase());
       set((s) => ({
-        boards: s.boards.map((b) => (b.id === id ? { ...b, ...input, bbsId: deriveBbsId(input.name) } : b)),
+        boards: s.boards.map((b) =>
+          b.id === id ? { ...b, ...input, bbsId: deriveBbsId(input.name), pairing: unpaired ? undefined : b.pairing } : b
+        ),
       }));
-      void setBoardPassword(id, input.pass);
       persist();
+      if (unpaired && existing) {
+        if (id === get().activeBoardId) {
+          endSession();
+          set({ loggedIn: false });
+        }
+        void boardSigner(existing).delete();
+      }
+      return { unpaired };
     },
 
     deleteBoard: (id) => {
@@ -426,7 +517,9 @@ export const useStore = create<AppState>((set, get) => {
       const boards = state.boards.filter((b) => b.id !== id);
       const activeBoardId = state.activeBoardId === id ? boards[0].id : state.activeBoardId;
       set({ boards, activeBoardId });
-      void deleteBoardPassword(id); // drop the keychain entry too
+      if (state.activeBoardId === id) endSession();
+      const gone = state.boards.find((b) => b.id === id);
+      if (gone) void boardSigner(gone).delete(); // drop the hardware key too
       persist();
       if (state.activeBoardId === id) void reloadMessages();
       return true;
@@ -485,7 +578,7 @@ export const useStore = create<AppState>((set, get) => {
         persist();
       } catch (e) {
         // Upload is idempotent (server de-dupes) — safe to retry; keep drafts.
-        set({ uploading: false, error: describeSyncError(e) });
+        failWith(board, e, { uploading: false });
       }
     },
     clearReport: () => set({ report: null }),
@@ -516,7 +609,7 @@ export const useStore = create<AppState>((set, get) => {
       persist();
     },
     toggleDemoMode: () => {
-      activeSession = null; // switching transport mode drops any live session
+      endSession(); // switching transport mode drops any live session
       set((s) => ({ settings: { ...s.settings, demoMode: !s.settings.demoMode }, loggedIn: false, error: null }));
       persist();
     },

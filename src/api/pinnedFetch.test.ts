@@ -10,6 +10,10 @@ function fakeNative(overrides: Partial<NativeQwkTls> = {}): NativeQwkTls {
     getFingerprint: jest.fn(),
     downloadToFile: jest.fn(),
     addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
+    generateDeviceKey: jest.fn(),
+    signWithDeviceKey: jest.fn(),
+    hasDeviceKey: jest.fn(),
+    deleteDeviceKey: jest.fn(),
     ...overrides,
   };
 }

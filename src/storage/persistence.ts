@@ -9,8 +9,9 @@ import { Board, Draft, Packet, Settings } from '../store/types';
 const KEY = 'v3qwk:state:v1';
 
 export interface PersistedState {
-  /** Boards WITHOUT `pass` — passwords live in the keychain (see secrets.ts). */
-  boards: Omit<Board, 'pass'>[];
+  /** Boards, including their pairing ids. No password exists to store: the
+   * phone's login secret is a hardware key (see src/api/deviceKey.ts). */
+  boards: Board[];
   activeBoardId: string;
   settings: Settings;
   drafts: Draft[];
