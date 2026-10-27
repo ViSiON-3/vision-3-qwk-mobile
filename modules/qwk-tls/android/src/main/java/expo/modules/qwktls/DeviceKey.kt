@@ -4,7 +4,6 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
-import android.security.keystore.StrongBoxUnavailableException
 import android.util.Base64
 import androidx.annotation.RequiresApi
 import expo.modules.kotlin.Promise
@@ -142,15 +141,18 @@ object DeviceKey {
     generateWithSpec(baseSpec(alias).build())
   }
 
-  /** Returns false (and generates nothing) when the device has no StrongBox,
-   * so the caller falls back to the regular (TEE) keystore. Kept in its own
-   * method so the API-28 StrongBox symbols are only resolved on P+. */
+  /** Returns false (and generates nothing) when StrongBox generation fails for
+   * any reason — StrongBoxUnavailableException on devices without it, but also
+   * InvalidAlgorithmParameterException / ProviderException on some OEMs — so
+   * the caller falls back to the regular (TEE) keystore; a failure unrelated
+   * to StrongBox then surfaces from that retry. Kept in its own method so the
+   * API-28 StrongBox symbols are only resolved on P+. */
   @RequiresApi(Build.VERSION_CODES.P)
   private fun tryGenerateStrongBoxKeyPair(alias: String): Boolean {
     return try {
       generateWithSpec(baseSpec(alias).setIsStrongBoxBacked(true).build())
       true
-    } catch (e: StrongBoxUnavailableException) {
+    } catch (e: Exception) {
       false
     }
   }

@@ -517,7 +517,12 @@ export const useStore = create<AppState>((set, get) => {
       const boards = state.boards.filter((b) => b.id !== id);
       const activeBoardId = state.activeBoardId === id ? boards[0].id : state.activeBoardId;
       set({ boards, activeBoardId });
-      if (state.activeBoardId === id) endSession();
+      if (state.activeBoardId === id) {
+        // The session belonged to the deleted board; the new active board has
+        // none, so return to Connect rather than staying in the logged-in UI.
+        endSession();
+        set({ loggedIn: false, connecting: false, pairing: false, error: null });
+      }
       const gone = state.boards.find((b) => b.id === id);
       if (gone) void boardSigner(gone).delete(); // drop the hardware key too
       persist();

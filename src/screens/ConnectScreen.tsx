@@ -20,11 +20,12 @@ export function ConnectScreen({ navigation }: Props) {
   const demoMode = useStore((s) => s.settings.demoMode);
   const [password, setPassword] = useState('');
 
-  // The password is for one request (pairing) only: never keep it around once
-  // the board is paired or the user switches boards.
+  // The password is for one request (pairing) only: drop it whenever the board
+  // or its pairing state changes, so a password typed for one BBS can never be
+  // sent to another.
   const paired = !!board?.pairing;
   useEffect(() => {
-    if (paired) setPassword('');
+    setPassword('');
   }, [paired, board?.id]);
 
   const needsPassword = !demoMode && !paired;

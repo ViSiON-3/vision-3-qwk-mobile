@@ -6,8 +6,8 @@ import { Screen, Card, Eyebrow, Chip, Mono, Button, useToast } from '../componen
 import { colors, fonts, fontSize, radius, spacing } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore, activeBoard, getActiveSession } from '../store/useStore';
-import { makeClient, describeSyncError } from '../store/net';
-import { loginForPairing, PairedDevice, QwkClient } from '../api';
+import { makeClient, describeSyncError, needsRepair } from '../store/net';
+import { loginForPairing, PairedDevice, QwkAuthError, QwkClient } from '../api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Devices'>;
 
@@ -39,10 +39,28 @@ export function DevicesScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Pair-token path (no live session): the client + token live for this screen only.
-  const pairAuth = useRef<{ client: QwkClient; token: string } | null>(null);
+  // Pair-token path (no live session): the client + token live for this screen
+  // only. State so the password form reappears when the token stops working; a
+  // ref mirror so the unmount cleanup can log it out.
+  const [pairAuth, setPairAuth] = useState<{ client: QwkClient; token: string } | null>(null);
+  const pairAuthRef = useRef(pairAuth);
+  pairAuthRef.current = pairAuth;
 
-  const fail = (e: unknown) => setError(describeSyncError(e));
+  /** Show an error. One that means "this phone is no longer paired" (unpaired
+   * elsewhere, or the password changed) also drops the local pairing + session,
+   * as the store does, so the screen falls back to the password login. */
+  const fail = (e: unknown) => {
+    setError(describeSyncError(e));
+    if (needsRepair(e) && board) void forgetPairing(board.id);
+  };
+
+  /** A pair token that was refused is useless: drop it (best-effort logout) so
+   * the password form comes back. */
+  const dropPairAuth = () => {
+    const auth = pairAuthRef.current;
+    setPairAuth(null);
+    if (auth) auth.client.logout(auth.token).catch(() => undefined);
+  };
 
   const loadWithSession = useCallback(async () => {
     if (!session) return;
@@ -64,8 +82,7 @@ export function DevicesScreen({ navigation }: Props) {
   // A pair token has one job here; invalidate it when the screen goes away.
   useEffect(
     () => () => {
-      const auth = pairAuth.current;
-      pairAuth.current = null;
+      const auth = pairAuthRef.current;
       if (auth) auth.client.logout(auth.token).catch(() => undefined);
     },
     []
@@ -84,8 +101,15 @@ export function DevicesScreen({ navigation }: Props) {
     try {
       const client = makeClient(board);
       const { token } = await loginForPairing(client, board.handle, pw);
-      pairAuth.current = { client, token };
-      setDevices(await client.listDevices(token));
+      try {
+        const list = await client.listDevices(token);
+        setPairAuth({ client, token });
+        setDevices(list);
+      } catch (e) {
+        // Keep the password form: a token that could not list is not kept.
+        client.logout(token).catch(() => undefined);
+        throw e;
+      }
     } catch (e) {
       fail(e);
     } finally {
@@ -100,8 +124,14 @@ export function DevicesScreen({ navigation }: Props) {
     setError(null);
     try {
       if (session) await session.unpairDevice(device.id);
-      else if (pairAuth.current) await pairAuth.current.client.deleteDevice(pairAuth.current.token, device.id);
-      else throw new Error('Log in first.');
+      else if (pairAuth) {
+        try {
+          await pairAuth.client.deleteDevice(pairAuth.token, device.id);
+        } catch (e) {
+          if (e instanceof QwkAuthError) dropPairAuth(); // pair token expired (10 min)
+          throw e;
+        }
+      } else throw new Error('Log in first.');
       setDevices((list) => (list ?? []).filter((d) => d.id !== device.id));
       const thisPhone = device.current || device.id === board.pairing?.deviceId;
       if (thisPhone) {
@@ -118,7 +148,7 @@ export function DevicesScreen({ navigation }: Props) {
     }
   };
 
-  const needsPassword = !session && !pairAuth.current;
+  const needsPassword = !session && !pairAuth;
 
   return (
     <Screen title="PAIRED DEVICES" onBack={() => navigation.goBack()} scroll>
