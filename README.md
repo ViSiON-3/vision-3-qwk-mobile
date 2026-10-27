@@ -42,14 +42,15 @@ upload → import report**. Built across six merged PRs:
   CP437/UTF-8 handling, HEADERS.DAT, NDX, plus the editor text pipeline
   (`sanitize`, `wrap`, `quote`, `tagline`). Format notes in
   [docs/qwk/FORMAT.md](docs/qwk/FORMAT.md).
-- `src/api/` — QWK Packet API client, bearer-token session, pinned fetch,
-  TOFU fingerprint capture.
-- `src/store/` — Zustand app state, AsyncStorage persistence (passwords in the
-  OS keychain), packet byte cache, board-scoped outbox drafts, `.REP` builder.
+- `src/api/` — QWK Packet API client, device pairing + challenge-signing
+  session (the password is used once to pair; the phone then logs in with a
+  P-256 key in its secure hardware), pinned fetch, TOFU fingerprint capture.
+- `src/store/` — Zustand app state, AsyncStorage persistence (no passwords
+  anywhere), packet byte cache, board-scoped outbox drafts, `.REP` builder.
 - `src/screens/`, `src/navigation/`, `src/components/`, `src/theme/` — the
   15-screen UI recreating the high-fidelity design handoff (CRT styling, VGA
   font).
-- `modules/qwk-tls/` — native TLS-pinning + streaming-download module
+- `modules/qwk-tls/` — native TLS-pinning + streaming-download + device-key module
   (**iOS only so far**). Where the native module is absent (Android, Expo Go),
   pinned boards fail with a clear "needs a development build" error; boards
   without a pinned fingerprint use the platform fetch.
@@ -74,7 +75,7 @@ upload → import report**. Built across six merged PRs:
 
 ```bash
 npm install
-npm test            # 153 Jest tests (packet engine, store, API — Node env)
+npm test            # Jest tests (packet engine, store, API — Node env)
 npm run typecheck   # tsc --noEmit
 npm start           # Expo dev server (iOS/Android via Expo Go or dev build)
 npm run web         # browser-run for quick manual passes (see note)

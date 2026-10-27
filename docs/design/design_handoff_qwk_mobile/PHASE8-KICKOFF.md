@@ -115,7 +115,8 @@ fingerprint**. The mobile client pins that fingerprint (see "Trust" below).
 - **Every** request must send header `X-V3-Client: vision3-mobile` (any non-empty
   value works today; requests without it — and browser-signature requests — get
   `404`). Sending a stable client identifier is the convention.
-- Every request except `login` must send `Authorization: Bearer <token>`.
+- Every request except `login`, `challenge` and `login/device` must send
+  `Authorization: Bearer <token>`.
 - Errors are JSON: `{"error": "<code>", "message": "<text>"}`. Rate limits return
   `429` with a `Retry-After` header (login 5/min per IP; packet/reply 30/min per
   user).
@@ -124,14 +125,31 @@ fingerprint**. The mobile client pins that fingerprint (see "Trust" below).
 
 | Method | Path | Request | Response |
 |--------|------|---------|----------|
-| `POST` | `/api/qwk/login` | JSON `{"handle","password"}` | `200` `{"token","expiresAt"}` · `401` bad creds · `500` `{"error":"internal"}` if token issue fails |
-| `GET` | `/api/qwk/packet` | (bearer) | `200` `application/zip` body = the `.QWK`, header `X-QWK-Messages: <n>` · `204` when no new mail |
-| `POST` | `/api/qwk/reply` | (bearer) `.REP` bytes, `application/zip`, ≤ 16 MiB | `200` `{"posted","skipped","duplicate","wrongBBS"}` · `400` `{"error":"bad_packet"}` on unparseable body |
+| `POST` | `/api/qwk/login` | JSON `{"handle","password"}` | `200` `{"token","expiresAt","scope":"pair"}` (10 min; devices endpoints only) · `401` bad creds · `429` `locked_out` + `Retry-After` · `403` `logon_level` / `intro_pending` |
+| `POST` | `/api/qwk/devices` | (pair token) `{"name","publicKey"}` — base64 DER SubjectPublicKeyInfo, P-256 or Ed25519 | `201` `{"deviceId","boardId"}` · `400` `bad_key` · `409` `key_exists` / `too_many_devices` (10 per account) |
+| `GET` | `/api/qwk/devices` | (either token) | `200` `[{"id","name","createdAt","lastUsed","current"}]` |
+| `DELETE` | `/api/qwk/devices/{id}` | (either token) | `204` · `404` not paired. Ends that device's sessions. |
+| `POST` | `/api/qwk/challenge` | `{"deviceId"}` (no token) | `200` `{"challenge","expiresAt"}` — single use, 60 s, issued for any id |
+| `POST` | `/api/qwk/login/device` | `{"deviceId","challenge","signature"}` (no token) | `200` `{"token","expiresAt","scope":"device"}` · `401` `challenge_invalid` (get a new one) · `401` `unauthorized` (not paired / bad signature → pair again) · lockout and deny codes as `login` |
+| `POST` | `/api/qwk/logout` | (bearer) | `204` |
+| `GET` | `/api/qwk/packet` | (device token) | `200` `application/zip` body = the `.QWK`, header `X-QWK-Messages: <n>` · `204` when no new mail · `403` `device_required` for a pair token |
+| `POST` | `/api/qwk/reply` | (device token) `.REP` bytes, `application/zip`, ≤ 16 MiB | `200` `{"posted","skipped","duplicate","wrongBBS"}` · `400` `{"error":"bad_packet"}` on unparseable body |
 
 Notes for the client:
-- **Auth model = "log in once, carry a token"** — the HTTP analog of an SSH
-  session. Store the token (not the password); it expires (default 24h) and is
-  invalidated by a BBS restart (in-memory) — on `401`, re-run `login`.
+- **Auth model = pair once, then device-key login** (vision-3-bbs#720). The
+  password is typed once: `login` yields a *pair* token, the app generates a
+  P-256 key in the Secure Enclave / Android Keystore and registers the public
+  half with `POST devices`, then discards the password. From then on a login is
+  `challenge` → sign the UTF-8 bytes of
+  `ViSiON/3 QWK API device login v1\n<boardId>\n<deviceId>\n<challenge>`
+  (ECDSA over SHA-256, DER or raw `r||s`; Ed25519 over the message) →
+  `login/device`, which returns a *device* token for packets. Tokens live in
+  memory on the server (a BBS restart invalidates them) and expire (default
+  24h); on `401` from an authed call, run the device login again. A `401
+  unauthorized` from `login/device` means the phone is no longer paired
+  (unpaired, or the password changed, which voids every device): ask for the
+  password and pair again. `403 logon_level` / `intro_pending` mean a retry
+  will not help. Call `logout` on sign-out.
 - **Download**: `204` means "nothing new" (not an error). On `200`, the body is a
   standard QWK zip (CONTROL.DAT, MESSAGES.DAT, HEADERS.DAT, NNN.NDX,
   PERSONAL.NDX, DOOR.ID) plus the ViSiON/3 sidecar `V3AREAS.JSON` (see "Area

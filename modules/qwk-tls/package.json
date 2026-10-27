@@ -1,7 +1,7 @@
 {
   "name": "qwk-tls",
   "version": "0.1.0",
-  "description": "TLS certificate-pinned HTTPS transport for the QWK Packet API",
+  "description": "TLS certificate-pinned HTTPS transport and device-key signing for the QWK Packet API",
   "main": "index.ts",
   "private": true
 }

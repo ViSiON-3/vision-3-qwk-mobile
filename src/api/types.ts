@@ -1,9 +1,39 @@
 /** Public types for the QWK Packet API client (Phase 7 contract). */
 
+/** Token scope: a password login yields `pair` (10 min, devices endpoints
+ * only); a device login yields `device` (packet/reply). Absent on servers
+ * from before device pairing, which treated every login as a device login. */
+export type TokenScope = 'pair' | 'device';
+
 export interface LoginResult {
   token: string;
-  /** ISO timestamp when the token expires (default TTL 24h). */
+  /** ISO timestamp when the token expires (pair: 10 min; device: default TTL 24h). */
   expiresAt: string;
+  scope?: TokenScope;
+}
+
+/** `POST devices` — the phone is now paired; both ids are needed to log in. */
+export interface PairResult {
+  deviceId: string;
+  /** The server's board identity, bound into every signed login message. */
+  boardId: string;
+}
+
+/** `POST challenge` — single use, bound to the device id, expires in ~60s. */
+export interface ChallengeResult {
+  challenge: string;
+  expiresAt: string;
+}
+
+/** One entry of `GET devices`. */
+export interface PairedDevice {
+  id: string;
+  name: string;
+  createdAt: string;
+  /** ISO timestamp of the last device login; null/absent if never used. */
+  lastUsed?: string | null;
+  /** True for the device the calling token belongs to. */
+  current: boolean;
 }
 
 /** Result of a packet download: either new bytes or "nothing new" (204). */

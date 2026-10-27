@@ -39,5 +39,24 @@ class QwkTlsModule : Module() {
         )
       }
     }
+
+    // Device pairing: per-alias P-256 ECDSA key in the Android Keystore
+    // (StrongBox/TEE when available). The private key never leaves the device;
+    // JS gets the SPKI public key and DER signatures over challenge messages.
+    AsyncFunction("generateDeviceKey") { alias: String, promise: Promise ->
+      DeviceKey.generate(alias, promise)
+    }
+
+    AsyncFunction("signWithDeviceKey") { alias: String, messageBase64: String, promise: Promise ->
+      DeviceKey.sign(alias, messageBase64, promise)
+    }
+
+    AsyncFunction("hasDeviceKey") { alias: String, promise: Promise ->
+      DeviceKey.has(alias, promise)
+    }
+
+    AsyncFunction("deleteDeviceKey") { alias: String, promise: Promise ->
+      DeviceKey.delete(alias, promise)
+    }
   }
 }

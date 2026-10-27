@@ -1,8 +1,10 @@
 /**
  * Binding to the native `QwkTls` module (Expo Modules API). Performs HTTPS
  * requests that pin the server cert's SHA-256 fingerprint — the piece RN's
- * built-in `fetch` can't do. Present only in a dev/production build; absent in
- * Expo Go (and in tests / Node), where `getNativeQwkTls()` returns null.
+ * built-in `fetch` can't do — and holds the per-board device key (Secure
+ * Enclave / Android Keystore) that signs QWK API login challenges. Present only
+ * in a dev/production build; absent in Expo Go (and in tests / Node), where
+ * `getNativeQwkTls()` returns null.
  */
 
 export interface NativeRequest {
@@ -44,6 +46,14 @@ export interface NativeEventSubscription {
   remove(): void;
 }
 
+export interface NativeDeviceKeyInfo {
+  /** Base64 DER SubjectPublicKeyInfo of the new P-256 public key. */
+  publicKey: string;
+  algorithm: 'P-256';
+  /** True when the private key lives in the Secure Enclave / Keystore hardware. */
+  hardwareBacked: boolean;
+}
+
 export interface NativeQwkTls {
   request(options: NativeRequest): Promise<NativeResponse>;
   /** Trust-on-first-use: return the server's leaf cert SHA-256 (64 upper-hex). */
@@ -59,6 +69,15 @@ export interface NativeQwkTls {
     event: 'onDownloadProgress',
     listener: (payload: { id: string; written: number; total: number }) => void
   ): NativeEventSubscription;
+
+  // --- device key (one per board, keyed by alias) ---
+
+  /** Generate a fresh P-256 key under `alias`, replacing any existing one. */
+  generateDeviceKey(alias: string): Promise<NativeDeviceKeyInfo>;
+  /** ECDSA-SHA256 over the base64-decoded message; returns the DER signature, base64. */
+  signWithDeviceKey(alias: string, messageBase64: string): Promise<string>;
+  hasDeviceKey(alias: string): Promise<boolean>;
+  deleteDeviceKey(alias: string): Promise<void>;
 }
 
 let cached: NativeQwkTls | null | undefined;

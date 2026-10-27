@@ -49,5 +49,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Boards: undefined;
   BoardForm: { boardId?: string };
+  /** Paired devices of the active board (list / unpair). */
+  Devices: undefined;
   Storage: undefined;
 };
