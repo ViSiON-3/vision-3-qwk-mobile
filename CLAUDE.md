@@ -31,6 +31,10 @@ rules, ACS) lives on the server.
   re-uploading the same `.REP` is safe, and treat a download as committed only
   once the bytes are fully received (the server advances newscan pointers on
   produce).
+- **Never store the password.** It is typed once to pair the phone (a P-256 key
+  in the Secure Enclave / Android Keystore registered with the BBS); every later
+  login signs a server challenge with that key. See
+  `docs/superpowers/specs/2026-10-27-device-pairing-design.md`.
 - **Pin the server's TLS fingerprint** (trust-on-first-use / sysop-entered), like
   an SSH host key — the API's default cert is self-signed. Support a real cert too.
 - **Simplicity & focus.** Match the design; don't reinvent BBS logic. Keep
