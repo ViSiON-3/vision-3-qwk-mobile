@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name           = 'QwkTls'
   s.version        = '0.1.0'
-  s.summary        = 'TLS certificate-pinned HTTPS transport for the QWK Packet API'
-  s.description    = 'Performs HTTPS requests that pin the server certificate SHA-256 fingerprint (trust-on-first-use, SSH-host-key style).'
+  s.summary        = 'TLS certificate-pinned HTTPS transport and device-key signing for the QWK Packet API'
+  s.description    = 'Performs HTTPS requests that pin the server certificate SHA-256 fingerprint (trust-on-first-use, SSH-host-key style) and signs device-pairing challenges with a Secure Enclave P-256 key.'
   s.author         = 'ViSiON/3'
   s.homepage       = 'https://github.com/ViSiON-3/vision-3-qwk-mobile'
   s.license        = { :type => 'MIT' }

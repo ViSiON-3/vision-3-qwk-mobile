@@ -33,6 +33,25 @@ public class QwkTlsModule: Module {
         self?.sendEvent("onDownloadProgress", ["id": requestId, "written": written, "total": total])
       }
     }
+
+    // Device pairing: per-alias P-256 ECDSA key in the Secure Enclave (software
+    // fallback on simulators). The private key never leaves the device; JS gets
+    // the SPKI public key and DER signatures over challenge messages.
+    AsyncFunction("generateDeviceKey") { (alias: String, promise: Promise) in
+      QwkDeviceKey.generate(alias: alias, promise: promise)
+    }
+
+    AsyncFunction("signWithDeviceKey") { (alias: String, messageBase64: String, promise: Promise) in
+      QwkDeviceKey.sign(alias: alias, messageBase64: messageBase64, promise: promise)
+    }
+
+    AsyncFunction("hasDeviceKey") { (alias: String, promise: Promise) in
+      QwkDeviceKey.has(alias: alias, promise: promise)
+    }
+
+    AsyncFunction("deleteDeviceKey") { (alias: String, promise: Promise) in
+      QwkDeviceKey.delete(alias: alias, promise: promise)
+    }
   }
 }
 

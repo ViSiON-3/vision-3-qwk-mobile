@@ -18,4 +18,6 @@ dependencies {
   // RN already ships OkHttp; declared explicitly so the module states its own
   // needs (gradle resolves to the app's aligned version).
   implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+  // @RequiresApi guards in DeviceKey.kt (also reaches us via expo-modules-core).
+  implementation 'androidx.annotation:annotation:1.9.1'
 }
