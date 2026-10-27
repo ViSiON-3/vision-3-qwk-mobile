@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Screen, Vga, Mono, Button, useToast } from '../components';
+import { Screen, Vga, Mono, Button, Chip, useToast } from '../components';
 import { colors, fonts, fontSize, letterSpacing, radius, spacing } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -15,12 +15,14 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BoardForm'>;
 
-/** Screen 12 — create or edit a board's connection + credentials. */
+/** Screen 12 — create or edit a board's connection + login handle. There is no
+ * password field: the password is typed once on Dial In to pair this phone. */
 export function BoardFormScreen({ navigation, route }: Props) {
   const boardId = route.params?.boardId;
   const boards = useStore((s) => s.boards);
   const addBoard = useStore((s) => s.addBoard);
   const updateBoard = useStore((s) => s.updateBoard);
+  const forgetPairing = useStore((s) => s.forgetPairing);
   const toast = useToast();
 
   const existing = boardId ? boards.find((b) => b.id === boardId) : undefined;
@@ -29,7 +31,6 @@ export function BoardFormScreen({ navigation, route }: Props) {
   const [host, setHost] = useState(existing?.host ?? '');
   const [port, setPort] = useState(existing ? String(existing.port) : '');
   const [handle, setHandle] = useState(existing?.handle ?? '');
-  const [pass, setPass] = useState(existing?.pass ?? '');
   const [fingerprint, setFingerprint] = useState(existing?.fingerprint ? formatFingerprint(existing.fingerprint) : '');
   const [probing, setProbing] = useState(false);
   // True when a freshly probed fingerprint differs from the board's saved pin —
@@ -72,13 +73,13 @@ export function BoardFormScreen({ navigation, route }: Props) {
       host: host.trim(),
       port: parseInt(port, 10) || 8666,
       handle: handle.trim(),
-      pass,
       fingerprint: fpEntered ? normalizeFingerprint(fingerprint) : undefined,
     };
-    if (boardId) updateBoard(boardId, input);
+    let unpaired = false;
+    if (boardId) ({ unpaired } = updateBoard(boardId, input));
     else addBoard(input);
     navigation.goBack();
-    toast(boardId ? 'Board updated' : 'Board added');
+    toast(unpaired ? 'Board updated — pair this phone again on Dial In' : boardId ? 'Board updated' : 'Board added');
   };
 
   return (
@@ -122,31 +123,56 @@ export function BoardFormScreen({ navigation, route }: Props) {
         </Field>
       </View>
 
-      <View style={styles.rowFields}>
-        <Field label="HANDLE" style={styles.flex1}>
-          <TextInput
-            value={handle}
-            onChangeText={setHandle}
-            placeholder="handle"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+      <Field label="HANDLE">
+        <TextInput
+          value={handle}
+          onChangeText={setHandle}
+          placeholder="handle"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Mono size={fontSize.listMeta} color={colors.textDim} style={styles.fpHint}>
+          No password is kept. You enter it once on Dial In to pair this phone; after that the phone logs in with
+          a key in its secure hardware.
+        </Mono>
+      </Field>
+
+      {existing && (
+        <Field label="THIS PHONE">
+          <View style={styles.pairRow}>
+            <View style={styles.pairInfo}>
+              {existing.pairing ? (
+                <>
+                  <Chip label="PAIRED" color={colors.green} />
+                  <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.pairMeta} numberOfLines={2}>
+                    {`${existing.pairing.deviceName} · since ${existing.pairing.pairedAt.slice(0, 10)}`}
+                  </Mono>
+                </>
+              ) : (
+                <>
+                  <Chip label="NOT PAIRED" color={colors.amber} />
+                  <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.pairMeta}>
+                    Pair from Dial In with your password.
+                  </Mono>
+                </>
+              )}
+            </View>
+            {existing.pairing && (
+              <Button
+                title="FORGET"
+                variant="danger"
+                onPress={async () => {
+                  await forgetPairing(existing.id);
+                  toast('Pairing forgotten — unpair it on the server from Paired devices too');
+                }}
+                style={styles.forgetBtn}
+              />
+            )}
+          </View>
         </Field>
-        <Field label="PASSWORD" style={styles.flex1}>
-          <TextInput
-            value={pass}
-            onChangeText={setPass}
-            placeholder="password"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </Field>
-      </View>
+      )}
 
       <Field label="TLS FINGERPRINT (SHA-256)">
         <TextInput
@@ -220,6 +246,10 @@ const styles = StyleSheet.create({
   field: { marginBottom: spacing.md },
   label: { marginBottom: spacing.sm },
   rowFields: { flexDirection: 'row', gap: spacing.md },
+  pairRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  pairInfo: { flex: 1, alignItems: 'flex-start' },
+  pairMeta: { marginTop: spacing.xs },
+  forgetBtn: { paddingHorizontal: spacing.md, height: 40 },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   input: {

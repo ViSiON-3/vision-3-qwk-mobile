@@ -136,6 +136,29 @@ export function SettingsScreen({ navigation }: Props) {
         <View style={styles.divider} />
 
         <Pressable
+          onPress={() => navigation.navigate('Devices')}
+          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+        >
+          <View style={styles.rowLabel}>
+            <Mono size={fontSize.listPrimary} color={colors.textPrimary}>
+              Paired devices
+            </Mono>
+            <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.sub}>
+              {settings.demoMode
+                ? 'demo mode — no live board'
+                : board?.pairing
+                  ? `this phone paired ${board.pairing.pairedAt.slice(0, 10)}`
+                  : 'this phone is not paired'}
+            </Mono>
+          </View>
+          <View style={styles.rowRight}>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </View>
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        <Pressable
           onPress={() => navigation.navigate('Storage')}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         >

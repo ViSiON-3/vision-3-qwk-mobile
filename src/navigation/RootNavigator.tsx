@@ -21,6 +21,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { BoardsScreen } from '../screens/BoardsScreen';
 import { BoardFormScreen } from '../screens/BoardFormScreen';
 import { StorageScreen } from '../screens/StorageScreen';
+import { DevicesScreen } from '../screens/DevicesScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -52,6 +53,7 @@ export function RootNavigator() {
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Boards" component={BoardsScreen} />
           <Stack.Screen name="BoardForm" component={BoardFormScreen} />
+          <Stack.Screen name="Devices" component={DevicesScreen} />
           <Stack.Screen name="Storage" component={StorageScreen} />
         </Stack.Group>
       ) : (
@@ -59,6 +61,7 @@ export function RootNavigator() {
           <Stack.Screen name="Connect" component={ConnectScreen} />
           <Stack.Screen name="Boards" component={BoardsScreen} />
           <Stack.Screen name="BoardForm" component={BoardFormScreen} />
+          <Stack.Screen name="Devices" component={DevicesScreen} />
         </Stack.Group>
       )}
     </Stack.Navigator>

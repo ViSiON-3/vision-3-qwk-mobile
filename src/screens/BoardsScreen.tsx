@@ -47,7 +47,11 @@ export function BoardsScreen({ navigation }: Props) {
                   {`${board.host}:${board.port}`}
                 </Mono>
                 <Mono size={fontSize.listMeta} color={colors.textMuted} style={styles.sub}>
-                  login <Mono size={fontSize.listMeta} color={colors.textSecondary}>{board.handle}</Mono>
+                  login <Mono size={fontSize.listMeta} color={colors.textSecondary}>{board.handle || '—'}</Mono>
+                  {' · '}
+                  <Mono size={fontSize.listMeta} color={board.pairing ? colors.green : colors.amber}>
+                    {board.pairing ? 'paired' : 'not paired'}
+                  </Mono>
                 </Mono>
               </Card>
             </Pressable>
